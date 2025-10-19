@@ -79,8 +79,10 @@ npm run dev
 
 For production deployments, Docker is recommended for easier management and auto-updates.
 
+**For Portainer users**: See [docs/portainer-deployment.md](docs/portainer-deployment.md) for a complete guide with web UI management.
+
 #### Prerequisites
-- Docker and Docker Compose installed
+- Docker and Docker Compose installed (or Portainer)
 - Discord Bot Token and Client ID
 
 #### Quick Start

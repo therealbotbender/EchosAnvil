@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  echosanvil-bot:
+    image: ghcr.io/therealbotbender/echosanvil:latest
+    container_name: echosanvil-bot
+    restart: unless-stopped
+
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - CLIENT_ID=${CLIENT_ID}
+      - GUILD_ID=${GUILD_ID:-}
+      - NODE_ENV=production
+
+    volumes:
+      - echosanvil-data:/app/data
+      # Optional: Uncomment if you have YouTube cookies
+      # - /path/to/youtube-cookies.txt:/app/youtube-cookies.txt:ro
+
+    networks:
+      - echosanvil-network
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: echosanvil-watchtower
+    restart: unless-stopped
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_LABEL_ENABLE=true
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - WATCHTOWER_INCLUDE_STOPPED=false
+      - WATCHTOWER_REVIVE_STOPPED=false
+
+    networks:
+      - echosanvil-network
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+volumes:
+  echosanvil-data:
+    driver: local
+
+networks:
+  echosanvil-network:
+    driver: bridge
