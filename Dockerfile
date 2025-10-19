@@ -1,8 +1,14 @@
 # Use Node.js LTS version
 FROM node:20-alpine
 
-# Install FFmpeg for audio processing
-RUN apk add --no-cache ffmpeg
+# Install dependencies including build tools for native modules
+RUN apk add --no-cache \
+    ffmpeg \
+    python3 \
+    make \
+    g++ \
+    gcc \
+    libc-dev
 
 # Create app directory
 WORKDIR /app
@@ -11,7 +17,10 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm ci --omit=dev || npm install --omit=dev
+
+# Remove build dependencies to reduce image size
+RUN apk del python3 make g++ gcc libc-dev
 
 # Copy application source
 COPY src/ ./src/
