@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   echosanvil-bot:
-    image: ghcr.io/therealbotbender/echosanvil:latest
+    image: echosanvil-bot:latest
     container_name: echosanvil-bot
     restart: unless-stopped
 
