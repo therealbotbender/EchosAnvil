@@ -75,6 +75,79 @@ For development with auto-reload:
 npm run dev
 ```
 
+### Docker Deployment
+
+For production deployments, Docker is recommended for easier management and auto-updates.
+
+#### Prerequisites
+- Docker and Docker Compose installed
+- Discord Bot Token and Client ID
+
+#### Quick Start
+
+1. Create a `.env` file in the project root:
+```bash
+DISCORD_TOKEN=your_bot_token_here
+CLIENT_ID=your_client_id_here
+GUILD_ID=your_guild_id_here
+```
+
+2. Create data directory for database persistence:
+```bash
+mkdir data
+```
+
+3. Build and start the container:
+```bash
+docker-compose up -d
+```
+
+4. View logs:
+```bash
+docker-compose logs -f
+```
+
+5. Stop the bot:
+```bash
+docker-compose down
+```
+
+#### Auto-Updates with Watchtower
+
+To enable automatic updates when you push new versions:
+
+1. Create a `docker-compose.override.yml`:
+```yaml
+version: '3.8'
+
+services:
+  echosanvil-bot:
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 300 --cleanup --label-enable
+```
+
+2. Start both services:
+```bash
+docker-compose up -d
+```
+
+Watchtower will check for updates every 5 minutes and automatically update your bot when new versions are available.
+
+#### Docker Commands
+
+- **Rebuild after code changes**: `docker-compose up -d --build`
+- **View container status**: `docker-compose ps`
+- **Restart bot**: `docker-compose restart`
+- **Remove all data**: `docker-compose down -v` (Warning: deletes database)
+
 ## How Radio Mode Works
 
 When radio mode is enabled, the bot:

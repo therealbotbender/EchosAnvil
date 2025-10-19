@@ -1,6 +1,28 @@
+# Dependencies
 node_modules/
+
+# Environment variables
 .env
+.env.local
+
+# Database files
 *.db
+*.db-shm
+*.db-wal
+
+# Logs
 *.log
-nul
+npm-debug.log*
+
+# YouTube cookies (contains authentication)
+youtube-cookies.txt
+
+# Claude AI
 .claude/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker volumes (if any)
+data/

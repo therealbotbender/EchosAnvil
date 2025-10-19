@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  echosanvil-bot:
+    build: .
+    image: echosanvil-radio-bot:latest
+    container_name: echosanvil-bot
+    restart: unless-stopped
+
+    # Environment variables - replace these with your actual values
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - CLIENT_ID=${CLIENT_ID}
+      - GUILD_ID=${GUILD_ID:-}
+      - NODE_ENV=production
+
+    # Mount volume for database persistence
+    volumes:
+      - ./data:/app/data
+      # Optional: Mount youtube cookies if you have them
+      # - ./youtube-cookies.txt:/app/youtube-cookies.txt:ro
+
+    # Network mode for better Discord voice connectivity
+    network_mode: bridge
+
+    # Resource limits (adjust as needed)
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
