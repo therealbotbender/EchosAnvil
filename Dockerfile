@@ -22,6 +22,9 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci --omit=dev || npm install --omit=dev
 
+# Make yt-dlp executable
+RUN chmod +x /app/node_modules/youtube-dl-exec/bin/yt-dlp 2>/dev/null || true
+
 # Remove only build dependencies (keep python3 and ffmpeg)
 RUN apk del .build-deps
 

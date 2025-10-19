@@ -470,31 +470,42 @@ export class MusicQueue {
         song.url,
         '-f', 'bestaudio[ext=webm]/bestaudio/best',
         '-o', '-', // Output to stdout
-        '--no-warnings',
-        '--quiet'
+        '--no-warnings'
+        // Remove --quiet to see what's happening
       ]);
 
       let errorOutput = '';
+      let hasResolved = false;
 
       ytdlp.stderr.on('data', (data) => {
-        errorOutput += data.toString();
+        const message = data.toString();
+        errorOutput += message;
+        console.log('yt-dlp stderr:', message.trim());
       });
 
       ytdlp.on('error', (err) => {
         console.error('yt-dlp spawn error:', err);
-        return reject(new Error(`Failed to spawn yt-dlp: ${err.message}`));
+        if (!hasResolved) {
+          hasResolved = true;
+          return reject(new Error(`Failed to spawn yt-dlp: ${err.message}`));
+        }
       });
 
       ytdlp.on('close', (code) => {
-        if (code !== 0 && code !== null) {
-          console.error('yt-dlp stderr:', errorOutput);
-          return reject(new Error(`yt-dlp exited with code ${code}`));
+        if (code !== 0 && code !== null && !hasResolved) {
+          console.error('yt-dlp exited with code:', code);
+          console.error('yt-dlp full stderr:', errorOutput);
+          hasResolved = true;
+          return reject(new Error(`yt-dlp exited with code ${code}: ${errorOutput}`));
         }
       });
 
       // Wait a moment for yt-dlp to start outputting data
       ytdlp.stdout.once('readable', () => {
         try {
+          if (hasResolved) return;
+          hasResolved = true;
+
           // Create audio resource from yt-dlp's stdout stream
           const resource = createAudioResource(ytdlp.stdout, {
             inlineVolume: true,
@@ -505,17 +516,28 @@ export class MusicQueue {
           console.log('✓ Streaming audio from yt-dlp');
           resolve();
         } catch (error) {
-          reject(new Error(`Failed to create audio resource: ${error.message}`));
+          if (!hasResolved) {
+            hasResolved = true;
+            reject(new Error(`Failed to create audio resource: ${error.message}`));
+          }
         }
       });
 
-      // Timeout after 10 seconds if no data received
-      setTimeout(() => {
-        if (!this.player.state || this.player.state.status !== AudioPlayerStatus.Playing) {
+      // Timeout after 15 seconds if no data received (increased from 10)
+      const timeout = setTimeout(() => {
+        if (!hasResolved) {
+          console.error('yt-dlp timeout after 15 seconds');
+          console.error('Last stderr output:', errorOutput);
+          hasResolved = true;
           ytdlp.kill();
-          reject(new Error('yt-dlp timeout - no audio data received'));
+          reject(new Error(`yt-dlp timeout - no audio data received. Error: ${errorOutput || 'No error output'}`));
         }
-      }, 10000);
+      }, 15000);
+
+      // Clear timeout if we successfully start playing
+      ytdlp.stdout.once('readable', () => {
+        clearTimeout(timeout);
+      });
     });
   }
 
