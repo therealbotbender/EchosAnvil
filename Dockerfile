@@ -1,10 +1,13 @@
 # Use Node.js LTS version
 FROM node:20-alpine
 
-# Install dependencies including build tools for native modules
+# Install runtime dependencies (ffmpeg and python3 needed by yt-dlp)
 RUN apk add --no-cache \
     ffmpeg \
-    python3 \
+    python3
+
+# Install build tools temporarily for native module compilation
+RUN apk add --no-cache --virtual .build-deps \
     make \
     g++ \
     gcc \
@@ -19,8 +22,8 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci --omit=dev || npm install --omit=dev
 
-# Remove build dependencies to reduce image size
-RUN apk del python3 make g++ gcc libc-dev
+# Remove only build dependencies (keep python3 and ffmpeg)
+RUN apk del .build-deps
 
 # Copy application source
 COPY src/ ./src/

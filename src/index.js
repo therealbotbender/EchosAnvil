@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Events, REST, Routes } from 'discord.js';
+import { Client, GatewayIntentBits, Events, REST, Routes, MessageFlags } from 'discord.js';
 import { config } from 'dotenv';
 import play from 'play-dl';
 import { MusicQueue } from './musicQueue.js';
@@ -85,26 +85,26 @@ client.on(Events.InteractionCreate, async interaction => {
         case 'pause':
           if (musicQueue.isPlaying) {
             musicQueue.pause();
-            await interaction.reply({ content: '⏸️ Paused', ephemeral: true });
+            await interaction.reply({ content: '⏸️ Paused', flags: MessageFlags.Ephemeral });
           } else {
             musicQueue.resume();
-            await interaction.reply({ content: '▶️ Resumed', ephemeral: true });
+            await interaction.reply({ content: '▶️ Resumed', flags: MessageFlags.Ephemeral });
           }
           break;
 
         case 'skip':
           if (musicQueue.isPlaying) {
             musicQueue.skip();
-            await interaction.reply({ content: '⏭️ Skipped', ephemeral: true });
+            await interaction.reply({ content: '⏭️ Skipped', flags: MessageFlags.Ephemeral });
           } else {
-            await interaction.reply({ content: 'Nothing is playing!', ephemeral: true });
+            await interaction.reply({ content: 'Nothing is playing!', flags: MessageFlags.Ephemeral });
           }
           break;
 
         case 'queue':
           const { createQueueEmbed } = await import('./radioEmbeds.js');
           const embed = createQueueEmbed(musicQueue.getQueue(), musicQueue.getCurrentSong());
-          await interaction.reply({ embeds: [embed], ephemeral: true });
+          await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
           break;
 
         case 'radio':
@@ -116,14 +116,14 @@ client.on(Events.InteractionCreate, async interaction => {
           if (!voiceChannel && newRadioState) {
             await interaction.reply({
               content: '❌ You need to be in a voice channel to enable radio mode!',
-              ephemeral: true
+              flags: MessageFlags.Ephemeral
             });
             break;
           }
 
           // Connect to voice if not already connected and enabling radio
           if (!musicQueue.connection && newRadioState) {
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             console.log('Radio button: Connecting to voice...');
             const connected = await musicQueue.connect(voiceChannel, interaction.channel);
 
@@ -144,7 +144,7 @@ client.on(Events.InteractionCreate, async interaction => {
           if (interaction.deferred) {
             await interaction.editReply({ content: replyContent });
           } else {
-            await interaction.reply({ content: replyContent, ephemeral: true });
+            await interaction.reply({ content: replyContent, flags: MessageFlags.Ephemeral });
           }
 
           // If turning on radio and nothing is playing, start playing
@@ -155,12 +155,12 @@ client.on(Events.InteractionCreate, async interaction => {
           break;
 
         default:
-          await interaction.reply({ content: 'Unknown button!', ephemeral: true });
+          await interaction.reply({ content: 'Unknown button!', flags: MessageFlags.Ephemeral });
       }
     } catch (error) {
       console.error('Button interaction error:', error);
       if (!interaction.replied) {
-        await interaction.reply({ content: 'Error processing button click', ephemeral: true });
+        await interaction.reply({ content: 'Error processing button click', flags: MessageFlags.Ephemeral });
       }
     }
   }
