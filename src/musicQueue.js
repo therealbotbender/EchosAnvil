@@ -451,9 +451,18 @@ export class MusicQueue {
 
     // Use yt-dlp directly via spawn - pipe audio directly to Discord
     const { spawn } = await import('child_process');
-    const ytdlpPath = join(__dirname, '..', 'node_modules', 'youtube-dl-exec', 'bin', 'yt-dlp.exe');
 
-    console.log('Streaming audio with yt-dlp...');
+    // Determine the correct yt-dlp binary based on platform
+    const platform = process.platform;
+    let ytdlpPath;
+
+    if (platform === 'win32') {
+      ytdlpPath = join(__dirname, '..', 'node_modules', 'youtube-dl-exec', 'bin', 'yt-dlp.exe');
+    } else {
+      ytdlpPath = join(__dirname, '..', 'node_modules', 'youtube-dl-exec', 'bin', 'yt-dlp');
+    }
+
+    console.log(`Platform: ${platform}, Using yt-dlp at: ${ytdlpPath}`);
 
     return new Promise((resolve, reject) => {
       // Spawn yt-dlp to output audio to stdout
