@@ -219,7 +219,13 @@ export class MusicQueue {
         url = url.replace('music.youtube.com', 'www.youtube.com');
       }
 
-      if (url.includes('youtube.com') || url.includes('youtu.be')) {
+      // Determine source type
+      const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+      const isSoundCloud = url.includes('soundcloud.com');
+      const isSpotify = url.includes('spotify.com');
+      const isDeezer = url.includes('deezer.com');
+
+      if (isYouTube) {
         // If it's a playlist URL, only get the first video
         if (url.includes('list=')) {
           const playlistInfo = await play.playlist_info(url, { incomplete: true });
@@ -279,8 +285,98 @@ export class MusicQueue {
         }
 
         return song;
+      } else if (isSoundCloud) {
+        // Handle SoundCloud URLs
+        const soundcloudInfo = await play.soundcloud(url);
+
+        const song = {
+          url: soundcloudInfo.url,
+          title: soundcloudInfo.name,
+          artist: soundcloudInfo.user?.name || 'Unknown',
+          duration: soundcloudInfo.durationInSec,
+          requestedBy: { id: userId, name: userName },
+          thumbnail: soundcloudInfo.thumbnail
+        };
+
+        trackUserSong(userId, userName, song.url, song.title, song.artist);
+
+        if (priority) {
+          this.queue.unshift(song);
+        } else {
+          this.queue.push(song);
+        }
+
+        return song;
+      } else if (isSpotify) {
+        // Handle Spotify URLs - note: Spotify requires fetching from YouTube for actual audio
+        const spotifyInfo = await play.spotify(url);
+
+        // Search for the song on YouTube to get playable audio
+        const searchQuery = `${spotifyInfo.name} ${spotifyInfo.artists?.[0]?.name || ''}`;
+        const searchResults = await play.search(searchQuery, { limit: 1 });
+
+        if (searchResults.length === 0) {
+          throw new Error('Could not find playable version of Spotify track');
+        }
+
+        const youtubeUrl = searchResults[0].url;
+        const videoInfo = await play.video_info(youtubeUrl);
+        const videoDetails = videoInfo.video_details;
+
+        const song = {
+          url: videoDetails.url,
+          title: spotifyInfo.name,
+          artist: spotifyInfo.artists?.[0]?.name || 'Unknown',
+          duration: videoDetails.durationInSec,
+          requestedBy: { id: userId, name: userName },
+          thumbnail: spotifyInfo.thumbnail?.url || videoDetails.thumbnails[0]?.url
+        };
+
+        trackUserSong(userId, userName, song.url, song.title, song.artist);
+
+        if (priority) {
+          this.queue.unshift(song);
+        } else {
+          this.queue.push(song);
+        }
+
+        return song;
+      } else if (isDeezer) {
+        // Handle Deezer URLs - similar to Spotify, requires YouTube for audio
+        const deezerInfo = await play.deezer(url);
+
+        // Search for the song on YouTube to get playable audio
+        const searchQuery = `${deezerInfo.title} ${deezerInfo.artist?.name || ''}`;
+        const searchResults = await play.search(searchQuery, { limit: 1 });
+
+        if (searchResults.length === 0) {
+          throw new Error('Could not find playable version of Deezer track');
+        }
+
+        const youtubeUrl = searchResults[0].url;
+        const videoInfo = await play.video_info(youtubeUrl);
+        const videoDetails = videoInfo.video_details;
+
+        const song = {
+          url: videoDetails.url,
+          title: deezerInfo.title,
+          artist: deezerInfo.artist?.name || 'Unknown',
+          duration: videoDetails.durationInSec,
+          requestedBy: { id: userId, name: userName },
+          thumbnail: deezerInfo.thumbnail || videoDetails.thumbnails[0]?.url
+        };
+
+        trackUserSong(userId, userName, song.url, song.title, song.artist);
+
+        if (priority) {
+          this.queue.unshift(song);
+        } else {
+          this.queue.push(song);
+        }
+
+        return song;
       } else {
-        throw new Error('Only YouTube URLs are supported at the moment');
+        throw new Error('Unsupported URL. Please use YouTube, SoundCloud, Spotify, or Deezer URLs.');
       }
     } catch (error) {
       console.error('Error adding song:', error);
@@ -447,6 +543,27 @@ export class MusicQueue {
   }
 
   async playWithLocalStream(song) {
+    // Check if it's a SoundCloud URL - use play-dl's native streaming
+    if (song.url.includes('soundcloud.com')) {
+      console.log('🎵 Using play-dl for SoundCloud streaming...');
+
+      try {
+        const stream = await play.stream(song.url);
+        const resource = createAudioResource(stream.stream, {
+          inputType: stream.type,
+          inlineVolume: true
+        });
+
+        this.player.play(resource);
+        console.log('✓ Streaming audio from SoundCloud');
+        return;
+      } catch (error) {
+        console.error('SoundCloud streaming failed:', error);
+        throw new Error(`Failed to stream from SoundCloud: ${error.message}`);
+      }
+    }
+
+    // For YouTube and other sources, use yt-dlp
     console.log('🎵 Using yt-dlp for streaming...');
 
     // Use yt-dlp directly via spawn - pipe audio directly to Discord

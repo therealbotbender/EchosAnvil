@@ -17,10 +17,10 @@ import {
 export const commands = [
   new SlashCommandBuilder()
     .setName('play')
-    .setDescription('Play a song or add it to the queue (accepts URLs or song names)')
+    .setDescription('Play a song or add it to the queue (YouTube, SoundCloud, Spotify, Deezer)')
     .addStringOption(option =>
       option.setName('query')
-        .setDescription('YouTube URL or song name to search for')
+        .setDescription('URL (YouTube/SoundCloud/Spotify/Deezer) or song name to search')
         .setRequired(true))
     .addBooleanOption(option =>
       option.setName('priority')
@@ -210,8 +210,21 @@ async function handlePlayCommand(interaction, musicQueue) {
   console.log(`Query: ${query}`);
   console.log(`Voice channel: ${voiceChannel?.name || 'none'}`);
 
-  // Detect if input is a URL or search query
-  const isUrl = query.includes('youtube.com') || query.includes('youtu.be') || query.startsWith('http');
+  // Detect source type from URL
+  let sourceType = 'search';
+  if (query.includes('youtube.com') || query.includes('youtu.be')) {
+    sourceType = 'youtube';
+  } else if (query.includes('soundcloud.com')) {
+    sourceType = 'soundcloud';
+  } else if (query.includes('spotify.com')) {
+    sourceType = 'spotify';
+  } else if (query.includes('deezer.com')) {
+    sourceType = 'deezer';
+  } else if (query.startsWith('http')) {
+    sourceType = 'url';
+  }
+
+  const isUrl = sourceType !== 'search';
 
   // Try to defer, but if it fails, we'll just send messages to the channel
   let useChannelFallback = false;
@@ -250,10 +263,33 @@ async function handlePlayCommand(interaction, musicQueue) {
     let url = query;
     let isSearchResult = false;
 
-    // If it's not a URL, search for it
+    // If it's not a URL, search for it (try multiple sources)
     if (!isUrl) {
-      console.log('Not a URL, searching YouTube...');
-      const searchResults = await play.search(query, { limit: 1 });
+      console.log('Not a URL, searching across sources...');
+
+      // Try sources in order: SoundCloud (less traffic), YouTube (fallback)
+      const searchSources = [
+        { name: 'SoundCloud', config: { source: { soundcloud: 'tracks' }, limit: 1 } },
+        { name: 'YouTube', config: { limit: 1 } }
+      ];
+
+      let searchResults = [];
+      let searchSource = '';
+
+      for (const source of searchSources) {
+        try {
+          console.log(`Trying ${source.name}...`);
+          searchResults = await play.search(query, source.config);
+          if (searchResults.length > 0) {
+            searchSource = source.name;
+            console.log(`✓ Found on ${source.name}: ${searchResults[0].title}`);
+            break;
+          }
+        } catch (error) {
+          console.log(`${source.name} search failed: ${error.message}`);
+          continue;
+        }
+      }
 
       if (searchResults.length === 0) {
         const errorMsg = `❌ No results found for: ${query}`;
@@ -268,6 +304,7 @@ async function handlePlayCommand(interaction, musicQueue) {
 
       url = searchResults[0].url;
       isSearchResult = true;
+      sourceType = searchSource.toLowerCase();
       console.log(`Found: ${searchResults[0].title} - ${url}`);
     }
 
@@ -278,13 +315,28 @@ async function handlePlayCommand(interaction, musicQueue) {
 
     // Send success message
     const position = musicQueue.getQueue().length + (musicQueue.isPlaying ? 1 : 0);
+
+    // Get source emoji
+    const sourceEmojis = {
+      youtube: '📺',
+      soundcloud: '🎵',
+      spotify: '🎧',
+      deezer: '🎶',
+      search: '🔍'
+    };
+    const sourceEmoji = sourceEmojis[sourceType] || '✅';
+
     if (useChannelFallback) {
-      const prefix = isSearchResult ? '🔍 Found and added:' : '✅ Added';
+      const prefix = isSearchResult ? `${sourceEmoji} Found and added:` : '✅ Added';
       await interaction.channel.send(`${prefix} **${song.title}** to queue (position ${position})`).catch(console.error);
     } else {
       const embed = createSongAddedEmbed(song, position, priority);
       if (isSearchResult) {
-        embed.setFooter({ text: `🔍 Search result for: ${query}` });
+        const sourceName = sourceType.charAt(0).toUpperCase() + sourceType.slice(1);
+        embed.setFooter({ text: `${sourceEmoji} ${sourceName} result for: ${query}` });
+      } else if (sourceType !== 'youtube') {
+        const sourceName = sourceType.charAt(0).toUpperCase() + sourceType.slice(1);
+        embed.setFooter({ text: `${sourceEmoji} Source: ${sourceName}` });
       }
       await interaction.editReply({ embeds: [embed] }).catch(console.error);
     }
