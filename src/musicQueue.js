@@ -470,8 +470,11 @@ export class MusicQueue {
         song.url,
         '-f', 'bestaudio[ext=webm]/bestaudio/best',
         '-o', '-', // Output to stdout
-        '--no-warnings'
-        // Remove --quiet to see what's happening
+        '--no-warnings',
+        '--extractor-args', 'youtube:player_client=android,web',
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        '--add-header', 'Accept-Language:en-US,en;q=0.9',
+        '--add-header', 'Sec-Fetch-Mode:navigate'
       ]);
 
       let errorOutput = '';
