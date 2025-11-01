@@ -17,10 +17,10 @@ import {
 export const commands = [
   new SlashCommandBuilder()
     .setName('play')
-    .setDescription('Play a song or add it to the queue')
+    .setDescription('Play a song or add it to the queue (accepts URLs or song names)')
     .addStringOption(option =>
-      option.setName('url')
-        .setDescription('YouTube URL of the song')
+      option.setName('query')
+        .setDescription('YouTube URL or song name to search for')
         .setRequired(true))
     .addBooleanOption(option =>
       option.setName('priority')
@@ -202,13 +202,16 @@ async function handlePlayCommand(interaction, musicQueue) {
   console.log(`User: ${interaction.user.username}`);
 
   // Get parameters first (so we can use them even if defer fails)
-  const url = interaction.options.getString('url');
+  const query = interaction.options.getString('query');
   const priority = interaction.options.getBoolean('priority') || false;
   const member = interaction.member;
   const voiceChannel = member.voice.channel;
 
-  console.log(`URL: ${url}`);
+  console.log(`Query: ${query}`);
   console.log(`Voice channel: ${voiceChannel?.name || 'none'}`);
+
+  // Detect if input is a URL or search query
+  const isUrl = query.includes('youtube.com') || query.includes('youtu.be') || query.startsWith('http');
 
   // Try to defer, but if it fails, we'll just send messages to the channel
   let useChannelFallback = false;
@@ -222,7 +225,7 @@ async function handlePlayCommand(interaction, musicQueue) {
 
     // If we can't even defer, try a quick reply
     try {
-      await interaction.reply({ content: '🔄 Processing your request...', ephemeral: true });
+      await interaction.reply({ content: isUrl ? '🔄 Processing your request...' : '🔍 Searching...', ephemeral: true });
       useChannelFallback = false;
     } catch (replyError) {
       // Both failed - will use channel fallback
@@ -244,6 +247,30 @@ async function handlePlayCommand(interaction, musicQueue) {
 
   // Do everything else asynchronously
   try {
+    let url = query;
+    let isSearchResult = false;
+
+    // If it's not a URL, search for it
+    if (!isUrl) {
+      console.log('Not a URL, searching YouTube...');
+      const searchResults = await play.search(query, { limit: 1 });
+
+      if (searchResults.length === 0) {
+        const errorMsg = `❌ No results found for: ${query}`;
+        if (useChannelFallback) {
+          await interaction.channel.send(errorMsg).catch(console.error);
+        } else {
+          const embed = createErrorEmbed(`No results found for: ${query}`);
+          await interaction.editReply({ embeds: [embed] }).catch(console.error);
+        }
+        return;
+      }
+
+      url = searchResults[0].url;
+      isSearchResult = true;
+      console.log(`Found: ${searchResults[0].title} - ${url}`);
+    }
+
     // Step 1: Add song to queue FIRST (fast operation)
     console.log('Step 1: Adding song to queue...');
     const song = await musicQueue.addSong(url, interaction.user.id, interaction.user.username, priority);
@@ -252,9 +279,13 @@ async function handlePlayCommand(interaction, musicQueue) {
     // Send success message
     const position = musicQueue.getQueue().length + (musicQueue.isPlaying ? 1 : 0);
     if (useChannelFallback) {
-      await interaction.channel.send(`✅ Added **${song.title}** to queue (position ${position})`).catch(console.error);
+      const prefix = isSearchResult ? '🔍 Found and added:' : '✅ Added';
+      await interaction.channel.send(`${prefix} **${song.title}** to queue (position ${position})`).catch(console.error);
     } else {
       const embed = createSongAddedEmbed(song, position, priority);
+      if (isSearchResult) {
+        embed.setFooter({ text: `🔍 Search result for: ${query}` });
+      }
       await interaction.editReply({ embeds: [embed] }).catch(console.error);
     }
 
