@@ -5,13 +5,20 @@ import { dirname, join } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const dbPath = join(__dirname, '..', 'radio.db');
+
+// Use /app/data for Docker persistence, otherwise use project root
+const isDocker = existsSync('/app/data');
+const dbPath = isDocker
+  ? '/app/data/radio.db'
+  : join(__dirname, '..', 'radio.db');
 
 let SQL;
 let db;
 
 // Initialize database
 async function initDatabase() {
+  console.log(`📊 Initializing database at: ${dbPath}`);
+
   SQL = await initSqlJs({
     locateFile: (file) => join(__dirname, '..', 'node_modules', 'sql.js', 'dist', file)
   });
@@ -19,8 +26,10 @@ async function initDatabase() {
   if (existsSync(dbPath)) {
     const buffer = readFileSync(dbPath);
     db = new SQL.Database(buffer);
+    console.log('✓ Loaded existing database');
   } else {
     db = new SQL.Database();
+    console.log('✓ Created new database');
   }
 
   // Create tables
