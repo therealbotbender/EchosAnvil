@@ -20,8 +20,8 @@ export class MusicQueue {
     this.radioMode = false;
     this.discoveryMode = false;
     this.activeUsers = new Set();
-    this.recentlyPlayed = []; // Track last 25 songs to avoid repeats
-    this.recentArtists = []; // Track last 5 artists to avoid same artist back-to-back
+    this.recentlyPlayed = []; // Adaptive history: up to 60% of library or 50 songs
+    this.recentArtists = []; // Adaptive history: up to 15% of library or 10 artists
     this.crossfadeDuration = 3000; // 3 seconds crossfade
     this.currentVolume = 1.0; // Track current volume level
     this.fadeInterval = null; // Track active fade interval
@@ -713,44 +713,93 @@ export class MusicQueue {
         return;
       }
 
-      // Filter out recently played songs (increased from 15 to 25)
+      console.log(`\n=== Radio Selection Debug ===`);
+      console.log(`Total songs in library: ${songs.length}`);
+      console.log(`Recent history size: ${this.recentlyPlayed.length} songs, ${this.recentArtists.length} artists`);
+
+      // Adaptive history size based on library size
+      const maxHistorySize = Math.min(Math.floor(songs.length * 0.6), 50); // Up to 60% of library or 50 songs
+      const maxArtistHistory = Math.min(Math.floor(songs.length * 0.15), 10); // Up to 15% or 10 artists
+
+      // Filter out recently played songs
       const recentUrls = new Set(this.recentlyPlayed);
       let availableSongs = songs.filter(song => !recentUrls.has(song.song_url));
 
-      // Filter out recent artists to avoid same artist back-to-back
-      const recentArtistSet = new Set(this.recentArtists);
-      let diverseSongs = availableSongs.filter(song =>
-        !recentArtistSet.has(song.song_artist) || song.song_artist === 'Unknown'
-      );
+      console.log(`After filtering recent songs: ${availableSongs.length} available`);
 
-      // If filtering by artist leaves us with nothing, just use available songs
+      // Only apply artist filtering if we have enough songs left
+      let diverseSongs = availableSongs;
+
+      // Only filter by artist if we have at least 20% of library available after song filtering
+      if (availableSongs.length >= Math.max(songs.length * 0.2, 10)) {
+        const recentArtistSet = new Set(this.recentArtists);
+        const artistFiltered = availableSongs.filter(song =>
+          !recentArtistSet.has(song.song_artist) || song.song_artist === 'Unknown'
+        );
+
+        // Only use artist filtering if it leaves us with at least 30% of available songs
+        if (artistFiltered.length >= availableSongs.length * 0.3) {
+          diverseSongs = artistFiltered;
+          console.log(`After filtering recent artists: ${diverseSongs.length} available`);
+        } else {
+          console.log(`Skipping artist filter (would leave only ${artistFiltered.length} songs)`);
+        }
+      } else {
+        console.log(`Skipping artist filter (only ${availableSongs.length} songs available)`);
+      }
+
+      // Smart history management
+      let justCleared = false;
       if (diverseSongs.length === 0) {
-        console.log('All artists recently played, clearing artist history');
-        this.recentArtists = [];
+        console.log('No songs available after filtering, resetting history...');
+        justCleared = true;
+
+        // Keep only the most recent 20% to prevent immediate repeats
+        const keepRecent = Math.max(3, Math.floor(this.recentlyPlayed.length * 0.2));
+        this.recentlyPlayed = this.recentlyPlayed.slice(-keepRecent);
+        this.recentArtists = this.recentArtists.slice(-2); // Keep only last 2 artists
+
+        console.log(`Trimmed history to ${this.recentlyPlayed.length} songs, ${this.recentArtists.length} artists`);
+
+        // Re-filter with trimmed history
+        const recentUrlsAfterTrim = new Set(this.recentlyPlayed);
+        availableSongs = songs.filter(song => !recentUrlsAfterTrim.has(song.song_url));
+
+        // Skip artist filtering after reset for more variety
         diverseSongs = availableSongs;
+
+        console.log(`After trimming: ${diverseSongs.length} songs available`);
+
+        // If still nothing (shouldn't happen), clear completely
+        if (diverseSongs.length === 0) {
+          console.log('Still no options, clearing all history');
+          this.recentlyPlayed = [];
+          this.recentArtists = [];
+          diverseSongs = songs;
+        }
       }
 
-      // If we've played everything recently, clear the history and try again
-      if (diverseSongs.length === 0) {
-        console.log('All songs recently played, clearing song history');
-        this.recentlyPlayed = [];
-        this.recentArtists = [];
-        availableSongs = songs;
-        diverseSongs = songs;
+      let randomSong;
+
+      // More aggressive variety boost after clearing or when pool is small
+      const useUniformRandom = justCleared || (diverseSongs.length < songs.length * 0.5);
+
+      if (useUniformRandom && Math.random() < 0.5) {
+        // 50% chance: completely uniform random selection
+        randomSong = diverseSongs[Math.floor(Math.random() * diverseSongs.length)];
+        console.log('Selection method: Uniform random (for variety)');
+      } else {
+        // Use weighted selection with strongly diminished returns
+        const weightedSongs = diverseSongs.flatMap(song => {
+          // Much more aggressive logarithmic scaling to reduce repeat bias
+          const userWeight = Math.ceil(Math.log2(song.user_count + 1));
+          const requestWeight = Math.ceil(Math.log2(song.total_requests + 1));
+          const totalWeight = Math.max(1, Math.min(userWeight + requestWeight, 5)); // Cap at 5
+          return Array(totalWeight).fill(song);
+        });
+        randomSong = weightedSongs[Math.floor(Math.random() * weightedSongs.length)];
+        console.log('Selection method: Weighted random (capped)');
       }
-
-      // Use improved weighted selection with diminishing returns on high request counts
-      // This prevents the same popular songs from dominating while still favoring them
-      const weightedSongs = diverseSongs.flatMap(song => {
-        // Base weight on user count and requests, but with logarithmic scaling
-        const userWeight = song.user_count * 2;
-        const requestWeight = Math.ceil(Math.log2(song.total_requests + 1) * 2);
-        const totalWeight = Math.max(1, userWeight + requestWeight);
-
-        return Array(totalWeight).fill(song);
-      });
-
-      const randomSong = weightedSongs[Math.floor(Math.random() * weightedSongs.length)];
 
       const radioSong = {
         url: randomSong.song_url,
@@ -759,23 +808,23 @@ export class MusicQueue {
         requestedBy: { id: 'radio', name: 'Radio Station' }
       };
 
-      // Add to recently played history (keep last 25)
+      // Add to recently played history with adaptive size
       this.recentlyPlayed.push(randomSong.song_url);
-      if (this.recentlyPlayed.length > 25) {
+      while (this.recentlyPlayed.length > maxHistorySize) {
         this.recentlyPlayed.shift();
       }
 
-      // Track recent artists (keep last 5 artists)
+      // Track recent artists with adaptive size
       if (randomSong.song_artist && randomSong.song_artist !== 'Unknown') {
         this.recentArtists.push(randomSong.song_artist);
-        if (this.recentArtists.length > 5) {
+        while (this.recentArtists.length > maxArtistHistory) {
           this.recentArtists.shift();
         }
       }
 
-      console.log(`Radio: Playing ${radioSong.title} by ${radioSong.artist}`);
-      console.log(`  - Recent history: ${this.recentlyPlayed.length}/25 songs, ${this.recentArtists.length}/5 artists`);
-      console.log(`  - Selected from ${diverseSongs.length} diverse options (${weightedSongs.length} weighted entries)`);
+      console.log(`Selected: "${radioSong.title}" by ${radioSong.artist}`);
+      console.log(`Updated history: ${this.recentlyPlayed.length}/${maxHistorySize} songs, ${this.recentArtists.length}/${maxArtistHistory} artists`);
+      console.log(`=== End Debug ===\n`);
 
       await this.playSong(radioSong);
     } catch (error) {
