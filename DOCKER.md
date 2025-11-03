@@ -29,10 +29,19 @@ Click **Deploy the stack** and the bot will start automatically.
 
 The database is automatically saved to `/app/data/radio.db` inside the container, which is mapped to `./data/radio.db` on your host machine.
 
-**Important:** Make sure the `./data` directory has proper permissions:
+**Permissions are handled automatically** by the entrypoint script. When the container starts:
+1. It checks if `/app/data` exists
+2. Fixes ownership to the `nodejs` user (UID 1001)
+3. Starts the bot securely as the non-root user
+
+If you encounter permission issues, ensure your host directory exists:
 ```bash
 mkdir -p ./data
-chmod 755 ./data
+```
+
+On Linux/Mac, you may need to set ownership to match the container user:
+```bash
+sudo chown -R 1001:1001 ./data
 ```
 
 ## Manual Docker Commands
@@ -88,10 +97,17 @@ docker-compose up -d --build
 
 ## Troubleshooting
 
+### Permission Denied Errors
+If you see `EACCES: permission denied` errors:
+1. Check entrypoint logs show: `Ensuring /app/data has correct permissions...`
+2. On Linux/Mac hosts, set ownership: `sudo chown -R 1001:1001 ./data`
+3. Verify the data directory exists on the host before starting the container
+
 ### Database Not Persisting
 - Check that the volume mount exists: `ls -la ./data/`
 - Verify database path in logs: Look for `📊 Initializing database at:`
 - Should show: `/app/data/radio.db`
+- Ensure the container is using the volume mount (check Portainer volumes section)
 
 ### Voice Connection Issues
 - Ensure `network_mode: bridge` is set in docker-compose.yml

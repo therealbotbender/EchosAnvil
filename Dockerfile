@@ -1,10 +1,11 @@
 # Use Node.js LTS version
 FROM node:20-alpine
 
-# Install runtime dependencies (ffmpeg and python3 needed by yt-dlp)
+# Install runtime dependencies (ffmpeg, python3, and su-exec for user switching)
 RUN apk add --no-cache \
     ffmpeg \
-    python3
+    python3 \
+    su-exec
 
 # Install build tools temporarily for native module compilation
 RUN apk add --no-cache --virtual .build-deps \
@@ -32,18 +33,23 @@ RUN apk del .build-deps
 COPY src/ ./src/
 COPY docs/ ./docs/
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Create directory for database persistence
 RUN mkdir -p /app/data
 
 # Set environment variables
 ENV NODE_ENV=production
 
-# Run as non-root user for security
+# Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
     chown -R nodejs:nodejs /app
 
-USER nodejs
+# Use entrypoint to handle permissions
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # Start the bot
 CMD ["node", "src/index.js"]
