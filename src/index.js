@@ -53,13 +53,14 @@ client.once(Events.ClientReady, async () => {
         { body: allCommands },
       );
       console.log(`Registered guild commands for guild ${guildId}`);
+    } else {
+      // Only register global if no GUILD_ID (may take up to an hour to propagate)
+      await rest.put(
+        Routes.applicationCommands(process.env.CLIENT_ID),
+        { body: allCommands },
+      );
+      console.log('Registered global commands (may take up to 1 hour to appear)');
     }
-
-    // Also register global (may take up to an hour to propagate)
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: allCommands },
-    );
 
     console.log('Successfully reloaded application (/) commands.');
   } catch (error) {
