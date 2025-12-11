@@ -124,17 +124,17 @@ export const commands = [
         .setMaxValue(10)),
 ].map(command => command.toJSON());
 
-export async function handleCommand(interaction, musicQueue) {
+export async function handleCommand(interaction, musicQueue, context) {
   try {
     switch (interaction.commandName) {
       case 'play':
-        await handlePlayCommand(interaction, musicQueue);
+        await handlePlayCommand(interaction, musicQueue, context);
         break;
       case 'search':
-        await handleSearchCommand(interaction, musicQueue);
+        await handleSearchCommand(interaction, musicQueue, context);
         break;
       case 'playlist':
-        await handlePlaylistCommand(interaction, musicQueue);
+        await handlePlaylistCommand(interaction, musicQueue, context);
         break;
       case 'skip':
         await handleSkipCommand(interaction, musicQueue);
@@ -158,7 +158,7 @@ export async function handleCommand(interaction, musicQueue) {
         await handleLeaveCommand(interaction, musicQueue);
         break;
       case 'radio':
-        await handleRadioCommand(interaction, musicQueue);
+        await handleRadioCommand(interaction, musicQueue, context);
         break;
       case 'discovery':
         await handleDiscoveryCommand(interaction, musicQueue);
@@ -197,15 +197,14 @@ export async function handleCommand(interaction, musicQueue) {
   }
 }
 
-async function handlePlayCommand(interaction, musicQueue) {
+async function handlePlayCommand(interaction, musicQueue, context) {
   console.log('=== PLAY COMMAND START ===');
   console.log(`User: ${interaction.user.username}`);
 
   // Get parameters first (so we can use them even if defer fails)
   const query = interaction.options.getString('query');
   const priority = interaction.options.getBoolean('priority') || false;
-  const member = interaction.member;
-  const voiceChannel = member.voice.channel;
+  const voiceChannel = context.voiceChannel;
 
   console.log(`Query: ${query}`);
   console.log(`Voice channel: ${voiceChannel?.name || 'none'}`);
@@ -248,11 +247,16 @@ async function handlePlayCommand(interaction, musicQueue) {
 
   // Validate voice channel
   if (!voiceChannel) {
-    const errorMsg = '❌ You need to be in a voice channel to play music!';
+    const errorMsg = context.isDM
+      ? '❌ You need to be in a voice channel in your last active server to play music!'
+      : '❌ You need to be in a voice channel to play music!';
     if (useChannelFallback) {
       await interaction.channel.send(errorMsg).catch(console.error);
     } else {
-      const embed = createErrorEmbed('You need to be in a voice channel to play music!');
+      const embedMsg = context.isDM
+        ? 'You need to be in a voice channel in your last active server to play music!'
+        : 'You need to be in a voice channel to play music!';
+      const embed = createErrorEmbed(embedMsg);
       await interaction.editReply({ embeds: [embed] }).catch(console.error);
     }
     return;
@@ -379,14 +383,13 @@ async function handlePlayCommand(interaction, musicQueue) {
   }
 }
 
-async function handleSearchCommand(interaction, musicQueue) {
+async function handleSearchCommand(interaction, musicQueue, context) {
   console.log('=== SEARCH COMMAND START ===');
   console.log(`User: ${interaction.user.username}`);
 
   const query = interaction.options.getString('query');
   const priority = interaction.options.getBoolean('priority') || false;
-  const member = interaction.member;
-  const voiceChannel = member.voice.channel;
+  const voiceChannel = context.voiceChannel;
 
   console.log(`Query: ${query}`);
   console.log(`Voice channel: ${voiceChannel?.name || 'none'}`);
@@ -409,11 +412,16 @@ async function handleSearchCommand(interaction, musicQueue) {
 
   // Validate voice channel
   if (!voiceChannel) {
-    const errorMsg = '❌ You need to be in a voice channel to play music!';
+    const errorMsg = context.isDM
+      ? '❌ You need to be in a voice channel in your last active server to play music!'
+      : '❌ You need to be in a voice channel to play music!';
     if (useChannelFallback) {
       await interaction.channel.send(errorMsg).catch(console.error);
     } else {
-      const embed = createErrorEmbed('You need to be in a voice channel to play music!');
+      const embedMsg = context.isDM
+        ? 'You need to be in a voice channel in your last active server to play music!'
+        : 'You need to be in a voice channel to play music!';
+      const embed = createErrorEmbed(embedMsg);
       await interaction.editReply({ embeds: [embed] }).catch(console.error);
     }
     return;
@@ -491,17 +499,18 @@ async function handleSearchCommand(interaction, musicQueue) {
   }
 }
 
-async function handlePlaylistCommand(interaction, musicQueue) {
+async function handlePlaylistCommand(interaction, musicQueue, context) {
   // Defer IMMEDIATELY before any processing to avoid timeout
   await interaction.deferReply();
 
   const url = interaction.options.getString('url');
-
-  const member = interaction.member;
-  const voiceChannel = member.voice.channel;
+  const voiceChannel = context.voiceChannel;
 
   if (!voiceChannel) {
-    const embed = createErrorEmbed('You need to be in a voice channel to play music!');
+    const embedMsg = context.isDM
+      ? 'You need to be in a voice channel in your last active server to play music!'
+      : 'You need to be in a voice channel to play music!';
+    const embed = createErrorEmbed(embedMsg);
     return interaction.editReply({ embeds: [embed] });
   }
 
@@ -601,15 +610,17 @@ async function handleLeaveCommand(interaction, musicQueue) {
   await interaction.reply({ embeds: [embed] });
 }
 
-async function handleRadioCommand(interaction, musicQueue) {
+async function handleRadioCommand(interaction, musicQueue, context) {
   const mode = interaction.options.getString('mode');
   const enabled = mode === 'on';
-  const member = interaction.member;
-  const voiceChannel = member.voice.channel;
+  const voiceChannel = context.voiceChannel;
 
   // Check if user is in voice channel
   if (!voiceChannel) {
-    const embed = createErrorEmbed('You need to be in a voice channel to use radio mode!');
+    const embedMsg = context.isDM
+      ? 'You need to be in a voice channel in your last active server to use radio mode!'
+      : 'You need to be in a voice channel to use radio mode!';
+    const embed = createErrorEmbed(embedMsg);
     return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 

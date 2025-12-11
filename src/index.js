@@ -3,6 +3,7 @@ import { config } from 'dotenv';
 import play from 'play-dl';
 import { MusicQueue } from './musicQueue.js';
 import { commands, handleCommand } from './commands.js';
+import { resolveDMContext, updateUserGuildTracking } from './dmContext.js';
 
 config();
 
@@ -24,10 +25,14 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.DirectMessages,
   ]
 });
 
 const guildQueues = new Map();
+
+// Track last active guild per user for DM support
+const userLastGuild = new Map(); // Map<userId, guildId>
 
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
@@ -64,7 +69,20 @@ client.once(Events.ClientReady, async () => {
 client.on(Events.InteractionCreate, async interaction => {
   console.log(`Received interaction: ${interaction.commandName || interaction.customId}`);
 
-  const guildId = interaction.guildId;
+  // Resolve context (works for both guild and DM)
+  const context = await resolveDMContext(interaction, client, userLastGuild);
+
+  if (!context.guildId) {
+    // Error already sent to user by resolveDMContext
+    return;
+  }
+
+  // Track this interaction for future DM commands (only for guild interactions)
+  if (!context.isDM) {
+    updateUserGuildTracking(interaction.user.id, context.guildId, userLastGuild);
+  }
+
+  const guildId = context.guildId;
 
   if (!guildQueues.has(guildId)) {
     guildQueues.set(guildId, new MusicQueue());
@@ -74,7 +92,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
   // Handle slash commands
   if (interaction.isChatInputCommand()) {
-    await handleCommand(interaction, musicQueue);
+    await handleCommand(interaction, musicQueue, context);
     return;
   }
 
@@ -109,13 +127,15 @@ client.on(Events.InteractionCreate, async interaction => {
 
         case 'radio':
           const newRadioState = !musicQueue.radioMode;
-          const member = interaction.member;
-          const voiceChannel = member.voice.channel;
+          const voiceChannel = context.voiceChannel;
 
           // Check if user is in voice channel
           if (!voiceChannel && newRadioState) {
+            const errorMsg = context.isDM
+              ? '❌ You need to be in a voice channel in your last active server to enable radio mode!'
+              : '❌ You need to be in a voice channel to enable radio mode!';
             await interaction.reply({
-              content: '❌ You need to be in a voice channel to enable radio mode!',
+              content: errorMsg,
               flags: MessageFlags.Ephemeral
             });
             break;
