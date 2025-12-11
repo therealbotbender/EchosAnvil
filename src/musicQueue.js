@@ -14,6 +14,7 @@ export class MusicQueue {
     this.currentSong = null;
     this.connection = null;
     this.player = createAudioPlayer();
+    this.subscription = null; // Store the subscription to prevent garbage collection
     this.isPlaying = false;
     this.textChannel = null;
     this.voiceChannel = null;
@@ -183,7 +184,7 @@ export class MusicQueue {
         throw new Error(`Failed to connect to Discord voice servers. This is likely a network/firewall issue. Error: ${error.message}`);
       }
 
-      this.connection.subscribe(this.player);
+      this.subscription = this.connection.subscribe(this.player);
       console.log('Player subscribed to voice connection');
 
       this.updateActiveUsers();
@@ -996,6 +997,10 @@ export class MusicQueue {
     // Clean up messages before disconnecting
     await this.cleanupMessages();
 
+    if (this.subscription) {
+      this.subscription.unsubscribe();
+      this.subscription = null;
+    }
     if (this.connection) {
       this.connection.destroy();
     }
@@ -1005,6 +1010,10 @@ export class MusicQueue {
   cleanup() {
     this.queue = [];
     this.currentSong = null;
+    if (this.subscription) {
+      this.subscription.unsubscribe();
+      this.subscription = null;
+    }
     this.connection = null;
     this.isPlaying = false;
     this.textChannel = null;
