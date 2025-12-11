@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, ContextMenuCommandBuilder, ApplicationCommandType, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
 import play from 'play-dl';
 import { getUserSongs, getStats } from './database.js';
 import {
@@ -123,6 +123,28 @@ export const commands = [
         .setMinValue(1)
         .setMaxValue(10)),
 ].map(command => command.toJSON());
+
+// Context Menu Commands (right-click on bot)
+export const contextMenuCommands = [
+  new ContextMenuCommandBuilder()
+    .setName('Play Song')
+    .setType(ApplicationCommandType.User),
+
+  new ContextMenuCommandBuilder()
+    .setName('Skip Song')
+    .setType(ApplicationCommandType.User),
+
+  new ContextMenuCommandBuilder()
+    .setName('Show Queue')
+    .setType(ApplicationCommandType.User),
+
+  new ContextMenuCommandBuilder()
+    .setName('Pause/Resume')
+    .setType(ApplicationCommandType.User),
+].map(command => command.toJSON());
+
+// Export all commands together for registration
+export const allCommands = [...commands, ...contextMenuCommands];
 
 export async function handleCommand(interaction, musicQueue, context) {
   try {

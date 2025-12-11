@@ -2,8 +2,9 @@ import { Client, GatewayIntentBits, Events, REST, Routes, MessageFlags } from 'd
 import { config } from 'dotenv';
 import play from 'play-dl';
 import { MusicQueue } from './musicQueue.js';
-import { commands, handleCommand } from './commands.js';
+import { commands, allCommands, handleCommand } from './commands.js';
 import { resolveDMContext, updateUserGuildTracking } from './dmContext.js';
+import { handleContextMenuCommand, handleModalSubmit } from './contextMenuHandlers.js';
 
 config();
 
@@ -49,7 +50,7 @@ client.once(Events.ClientReady, async () => {
     if (guildId) {
       await rest.put(
         Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId),
-        { body: commands },
+        { body: allCommands },
       );
       console.log(`Registered guild commands for guild ${guildId}`);
     }
@@ -57,7 +58,7 @@ client.once(Events.ClientReady, async () => {
     // Also register global (may take up to an hour to propagate)
     await rest.put(
       Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands },
+      { body: allCommands },
     );
 
     console.log('Successfully reloaded application (/) commands.');
@@ -183,6 +184,32 @@ client.on(Events.InteractionCreate, async interaction => {
         await interaction.reply({ content: 'Error processing button click', flags: MessageFlags.Ephemeral });
       }
     }
+  }
+
+  // Handle context menu (right-click) commands
+  if (interaction.isUserContextMenuCommand()) {
+    try {
+      await handleContextMenuCommand(interaction, musicQueue, context);
+    } catch (error) {
+      console.error('Context menu error:', error);
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: 'Error processing command', flags: MessageFlags.Ephemeral }).catch(() => {});
+      }
+    }
+    return;
+  }
+
+  // Handle modal (form) submissions
+  if (interaction.isModalSubmit()) {
+    try {
+      await handleModalSubmit(interaction, musicQueue, context);
+    } catch (error) {
+      console.error('Modal submit error:', error);
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: 'Error processing request', flags: MessageFlags.Ephemeral }).catch(() => {});
+      }
+    }
+    return;
   }
 });
 
