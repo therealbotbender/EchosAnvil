@@ -214,6 +214,7 @@ export class MusicQueue {
   async getVideoInfoWithYtDlp(url) {
     // Use yt-dlp to get video info with age verification bypass
     const { spawn } = await import('child_process');
+    const { existsSync } = await import('fs');
     const platform = process.platform;
     let ytdlpPath;
 
@@ -223,14 +224,28 @@ export class MusicQueue {
       ytdlpPath = join(__dirname, '..', 'node_modules', 'youtube-dl-exec', 'bin', 'yt-dlp');
     }
 
+    // Build arguments with cookie support
+    const args = [
+      url,
+      '-J', // Output JSON metadata
+      '--no-warnings',
+      '--extractor-args', 'youtube:player_client=android',
+      '--age-limit', '0'
+    ];
+
+    // Check for cookies file (supports both .txt and Netscape format)
+    const cookiesPath = process.env.YOUTUBE_COOKIES_FILE || join(__dirname, '..', 'cookies.txt');
+    if (existsSync(cookiesPath)) {
+      console.log(`Using YouTube cookies from: ${cookiesPath}`);
+      args.push('--cookies', cookiesPath);
+    } else if (process.env.YOUTUBE_COOKIES_BROWSER) {
+      // Try to use cookies from browser if specified
+      console.log(`Attempting to use cookies from browser: ${process.env.YOUTUBE_COOKIES_BROWSER}`);
+      args.push('--cookies-from-browser', process.env.YOUTUBE_COOKIES_BROWSER);
+    }
+
     return new Promise((resolve, reject) => {
-      const ytdlp = spawn(ytdlpPath, [
-        url,
-        '-J', // Output JSON metadata
-        '--no-warnings',
-        '--extractor-args', 'youtube:player_client=android',
-        '--age-limit', '0'
-      ]);
+      const ytdlp = spawn(ytdlpPath, args);
 
       let jsonOutput = '';
       let errorOutput = '';
@@ -628,6 +643,7 @@ export class MusicQueue {
 
     // Use yt-dlp directly via spawn - pipe audio directly to Discord
     const { spawn } = await import('child_process');
+    const { existsSync } = await import('fs');
 
     // Determine the correct yt-dlp binary based on platform
     const platform = process.platform;
@@ -641,19 +657,33 @@ export class MusicQueue {
 
     console.log(`Platform: ${platform}, Using yt-dlp at: ${ytdlpPath}`);
 
+    // Build arguments with cookie support
+    const args = [
+      song.url,
+      '-f', 'bestaudio[ext=webm]/bestaudio/best',
+      '-o', '-', // Output to stdout
+      '--no-warnings',
+      '--extractor-args', 'youtube:player_client=android',
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      '--add-header', 'Accept-Language:en-US,en;q=0.9',
+      '--add-header', 'Sec-Fetch-Mode:navigate',
+      '--age-limit', '0' // Bypass age verification
+    ];
+
+    // Check for cookies file (supports both .txt and Netscape format)
+    const cookiesPath = process.env.YOUTUBE_COOKIES_FILE || join(__dirname, '..', 'cookies.txt');
+    if (existsSync(cookiesPath)) {
+      console.log(`Using YouTube cookies from: ${cookiesPath}`);
+      args.push('--cookies', cookiesPath);
+    } else if (process.env.YOUTUBE_COOKIES_BROWSER) {
+      // Try to use cookies from browser if specified
+      console.log(`Attempting to use cookies from browser: ${process.env.YOUTUBE_COOKIES_BROWSER}`);
+      args.push('--cookies-from-browser', process.env.YOUTUBE_COOKIES_BROWSER);
+    }
+
     return new Promise((resolve, reject) => {
       // Spawn yt-dlp to output audio to stdout
-      const ytdlp = spawn(ytdlpPath, [
-        song.url,
-        '-f', 'bestaudio[ext=webm]/bestaudio/best',
-        '-o', '-', // Output to stdout
-        '--no-warnings',
-        '--extractor-args', 'youtube:player_client=android',
-        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        '--add-header', 'Accept-Language:en-US,en;q=0.9',
-        '--add-header', 'Sec-Fetch-Mode:navigate',
-        '--age-limit', '0' // Bypass age verification
-      ]);
+      const ytdlp = spawn(ytdlpPath, args);
 
       let errorOutput = '';
       let hasResolved = false;

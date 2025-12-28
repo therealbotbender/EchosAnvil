@@ -57,13 +57,23 @@ GUILD_ID=your_guild_id_here # optional: enables instant guild command sync
    - Generate OAuth2 URL with these scopes: `bot`, `applications.commands`
    - Bot permissions needed: `Connect`, `Speak`, `Use Voice Activity`
 
-4. (Optional but recommended) Set up YouTube authentication to avoid rate limits:
-```bash
-npm run setup-youtube
-```
-Follow the prompts to authenticate. This helps prevent YouTube blocks.
+4. **Set up YouTube cookies** (Required for age-restricted content):
 
- Alternatively, create a `youtube-cookies.txt` file in the project root with your YouTube cookie string (see docs/youtube-cookies-setup.md). The bot will load it automatically on startup.
+   Export cookies from your browser to enable age-restricted videos:
+
+   ```bash
+   # See detailed instructions in docs/youtube-cookies-setup.md
+   # Quick: Install "Get cookies.txt LOCALLY" browser extension
+   # Export from youtube.com and save as cookies.txt in project root
+   ```
+
+   Or set environment variable to use browser cookies:
+   ```bash
+   # In .env file:
+   YOUTUBE_COOKIES_BROWSER=chrome
+   ```
+
+   **See [docs/youtube-cookies-setup.md](docs/youtube-cookies-setup.md) for complete setup guide.**
 
 5. Start the bot:
 ```bash

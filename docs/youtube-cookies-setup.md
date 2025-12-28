@@ -1,55 +1,89 @@
 # YouTube Cookies Setup
 
-To avoid rate limiting and blocks from YouTube, you can authenticate using cookies.
+**Required for age-restricted content!** Some YouTube videos require authentication to play. The bot uses cookies to bypass age verification.
 
-## Method 1: Using play-dl's built-in authorization
+## Quick Setup (Recommended)
 
-```javascript
-import play from 'play-dl';
+### Method 1: Export cookies from browser
 
-// One-time setup - run this once
-await play.authorization();
+1. **Install browser extension:**
+   - Chrome/Edge: [Get cookies.txt LOCALLY](https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
+   - Firefox: [cookies.txt](https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/)
+
+2. **Export cookies:**
+   - Go to https://www.youtube.com while logged in
+   - Click the extension icon
+   - Click "Export" or "Download"
+   - Save as `cookies.txt` in your project root
+
+3. **Restart the bot** - cookies will be automatically detected
+
+### Method 2: Use cookies from browser automatically
+
+Set environment variable to extract cookies from your browser:
+
+```bash
+# In your .env file
+YOUTUBE_COOKIES_BROWSER=chrome
 ```
 
-This will prompt you to log in via OAuth and save credentials.
+Supported browsers: `chrome`, `firefox`, `edge`, `safari`, `opera`, `brave`
 
-## Method 2: Export cookies from browser (Recommended)
+**Note:** This requires the browser to be installed on the same machine as the bot.
 
-1. Install a browser extension like "Get cookies.txt LOCALLY"
-2. Go to youtube.com while logged in
-3. Export cookies
-4. Save as `youtube-cookies.txt` in project root
+### Method 3: Custom cookies path
 
-## Method 3: Manual cookie setup
+If you want to store cookies in a different location:
 
-```javascript
-import play from 'play-dl';
-
-// Add to src/index.js before bot starts
-const cookies = {
-  youtube: {
-    cookie: 'YOUR_YOUTUBE_COOKIE_STRING'
-  }
-};
-
-await play.setToken(cookies);
+```bash
+# In your .env file
+YOUTUBE_COOKIES_FILE=/path/to/your/cookies.txt
 ```
 
-## Getting Cookie String
+## Docker Setup
 
-1. Go to youtube.com (logged in)
-2. Open DevTools (F12)
-3. Go to Application > Cookies > https://www.youtube.com
-4. Copy the values of these cookies:
-   - VISITOR_INFO1_LIVE
-   - CONSENT
-   - PREF
+If running in Docker, you need to provide a cookies file:
 
-Format: `VISITOR_INFO1_LIVE=value; CONSENT=value; PREF=value`
+1. Export cookies to `cookies.txt` on your host machine (see Method 1 above)
+2. Mount the file in your docker-compose.yml or Portainer stack:
+
+```yaml
+volumes:
+  - ./cookies.txt:/app/cookies.txt:ro
+```
+
+Or use environment variable:
+
+```yaml
+environment:
+  - YOUTUBE_COOKIES_FILE=/app/cookies.txt
+```
+
+## Verifying Setup
+
+When the bot starts, you should see:
+```
+Using YouTube cookies from: /app/cookies.txt
+```
+
+If you see this message, cookies are being used and age-restricted videos will work.
+
+## Troubleshooting
+
+### Cookies not working?
+- Make sure you're logged into YouTube when exporting
+- Cookies expire - re-export them (usually valid for 6-12 months)
+- Ensure the cookies.txt file is in Netscape format
+- Check file permissions (bot needs read access)
+
+### Still getting age verification errors?
+- Your cookies may have expired - re-export them
+- Make sure the cookies are from the same YouTube account
+- Try logging into YouTube and watching an age-restricted video manually first
 
 ## Important Notes
 
-- Keep cookies private (add to .gitignore)
-- Cookies expire - you'll need to refresh them periodically
-- Don't share cookies publicly
-- Using cookies makes you appear as a regular user to YouTube
+- **Keep cookies private** - they're already in `.gitignore`
+- **Don't share cookies** - they contain your authentication
+- **Cookies expire** - refresh them every 6-12 months
+- **One account** - use a dedicated YouTube account for the bot if concerned about security
