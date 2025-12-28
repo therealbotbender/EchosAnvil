@@ -191,16 +191,54 @@ deploy:
 
 Then redeploy the stack.
 
-### Add YouTube Cookies
+### Add YouTube Cookies (Required for Age-Restricted Content)
 
-1. Upload `youtube-cookies.txt` to your server
-2. Edit the stack and uncomment:
+To play age-restricted YouTube videos, you need to provide cookies:
+
+**Step 1: Export Cookies from Your Browser**
+
+1. Install browser extension:
+   - Chrome/Edge: [Get cookies.txt LOCALLY](https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
+   - Firefox: [cookies.txt](https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/)
+
+2. Go to https://www.youtube.com while logged in
+3. Click the extension icon → Export
+4. Save the file as `cookies.txt`
+
+**Step 2: Upload to Your Server**
+
+Upload `cookies.txt` to your server. Choose a location like:
+- `/opt/echosanvil/cookies.txt`
+- `/home/yourusername/cookies.txt`
+- Or anywhere accessible by Docker
+
+**Step 3: Update Portainer Stack**
+
+1. Go to **Stacks** → `echosanvil-bot` → **Editor**
+2. Find the volumes section and uncomment the cookies line:
    ```yaml
    volumes:
-     - /path/to/youtube-cookies.txt:/app/youtube-cookies.txt:ro
+     - echosanvil-data:/app/data
+     - /opt/echosanvil/cookies.txt:/app/cookies.txt:ro
    ```
-3. Update the path to your file location
-4. Redeploy the stack
+3. Update `/opt/echosanvil/cookies.txt` to your actual file path
+4. Click **Update the stack**
+
+**Step 4: Verify**
+
+1. Go to **Containers** → `echosanvil-bot` → **Logs**
+2. Look for: `Using YouTube cookies from: /app/cookies.txt`
+3. If you see this, cookies are working!
+
+**Alternative: Use Browser Cookies Directly**
+
+Instead of a file, you can extract cookies from a browser on the server:
+
+1. Add environment variable in Portainer:
+   - `YOUTUBE_COOKIES_BROWSER=chrome` (or firefox, edge, etc.)
+2. This requires the browser to be installed in the Docker container (not recommended)
+
+See [docs/youtube-cookies-setup.md](../docs/youtube-cookies-setup.md) for more details.
 
 ## Security Best Practices
 

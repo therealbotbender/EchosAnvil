@@ -14,8 +14,8 @@ services:
 
     volumes:
       - echosanvil-data:/app/data
-      # Optional: Uncomment if you have YouTube cookies
-      # - /path/to/youtube-cookies.txt:/app/youtube-cookies.txt:ro
+      # REQUIRED for age-restricted videos: Uncomment and set path to your cookies.txt
+      # - /path/to/cookies.txt:/app/cookies.txt:ro
 
     networks:
       - echosanvil-network
