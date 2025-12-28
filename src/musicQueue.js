@@ -211,6 +211,65 @@ export class MusicQueue {
     });
   }
 
+  async getVideoInfoWithYtDlp(url) {
+    // Use yt-dlp to get video info with age verification bypass
+    const { spawn } = await import('child_process');
+    const platform = process.platform;
+    let ytdlpPath;
+
+    if (platform === 'win32') {
+      ytdlpPath = join(__dirname, '..', 'node_modules', 'youtube-dl-exec', 'bin', 'yt-dlp.exe');
+    } else {
+      ytdlpPath = join(__dirname, '..', 'node_modules', 'youtube-dl-exec', 'bin', 'yt-dlp');
+    }
+
+    return new Promise((resolve, reject) => {
+      const ytdlp = spawn(ytdlpPath, [
+        url,
+        '-J', // Output JSON metadata
+        '--no-warnings',
+        '--extractor-args', 'youtube:player_client=android',
+        '--age-limit', '0'
+      ]);
+
+      let jsonOutput = '';
+      let errorOutput = '';
+
+      ytdlp.stdout.on('data', (data) => {
+        jsonOutput += data.toString();
+      });
+
+      ytdlp.stderr.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+
+      ytdlp.on('close', (code) => {
+        if (code !== 0) {
+          return reject(new Error(`Failed to get video info: ${errorOutput}`));
+        }
+
+        try {
+          const metadata = JSON.parse(jsonOutput);
+          // Convert to play-dl format for compatibility
+          const videoDetails = {
+            url: metadata.webpage_url || metadata.url,
+            title: metadata.title,
+            channel: { name: metadata.uploader || metadata.channel || 'Unknown' },
+            durationInSec: metadata.duration || 0,
+            thumbnails: metadata.thumbnails ? [{ url: metadata.thumbnail }] : []
+          };
+          resolve({ video_details: videoDetails });
+        } catch (error) {
+          reject(new Error(`Failed to parse video info: ${error.message}`));
+        }
+      });
+
+      ytdlp.on('error', (error) => {
+        reject(new Error(`Failed to spawn yt-dlp: ${error.message}`));
+      });
+    });
+  }
+
   async addSong(url, userId, userName, priority = false) {
     try {
       let songInfo;
@@ -265,7 +324,7 @@ export class MusicQueue {
         }
 
         // Regular single video URL
-        songInfo = await play.video_info(url);
+        songInfo = await this.getVideoInfoWithYtDlp(url);
         const videoDetails = songInfo.video_details;
 
         const song = {
@@ -321,7 +380,7 @@ export class MusicQueue {
         }
 
         const youtubeUrl = searchResults[0].url;
-        const videoInfo = await play.video_info(youtubeUrl);
+        const videoInfo = await this.getVideoInfoWithYtDlp(youtubeUrl);
         const videoDetails = videoInfo.video_details;
 
         const song = {
@@ -355,7 +414,7 @@ export class MusicQueue {
         }
 
         const youtubeUrl = searchResults[0].url;
-        const videoInfo = await play.video_info(youtubeUrl);
+        const videoInfo = await this.getVideoInfoWithYtDlp(youtubeUrl);
         const videoDetails = videoInfo.video_details;
 
         const song = {
