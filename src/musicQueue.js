@@ -229,8 +229,10 @@ export class MusicQueue {
       url,
       '-J', // Output JSON metadata
       '--no-warnings',
-      '--extractor-args', 'youtube:player_client=android',
-      '--age-limit', '0'
+      // Try multiple player clients for better age restriction bypass
+      '--extractor-args', 'youtube:player_client=android,web_creator,web_embedded',
+      '--age-limit', '0',
+      '--no-check-certificate'
     ];
 
     // Cookie support (priority order: env string > file > browser)
@@ -681,11 +683,13 @@ export class MusicQueue {
       '-f', 'bestaudio[ext=webm]/bestaudio/best',
       '-o', '-', // Output to stdout
       '--no-warnings',
-      '--extractor-args', 'youtube:player_client=android',
+      // Try multiple player clients for better age restriction bypass
+      '--extractor-args', 'youtube:player_client=android,web_creator,web_embedded',
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       '--add-header', 'Accept-Language:en-US,en;q=0.9',
       '--add-header', 'Sec-Fetch-Mode:navigate',
-      '--age-limit', '0' // Bypass age verification
+      '--age-limit', '0', // Bypass age verification
+      '--no-check-certificate'
     ];
 
     // Cookie support (priority order: env string > file > browser)
