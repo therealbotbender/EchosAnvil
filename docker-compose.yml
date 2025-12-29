@@ -13,6 +13,8 @@ services:
       - CLIENT_ID=${CLIENT_ID}
       - GUILD_ID=${GUILD_ID:-}
       - NODE_ENV=production
+      # Required for age-restricted YouTube videos - paste your cookies.txt content
+      - YOUTUBE_COOKIES=${YOUTUBE_COOKIES}
 
     # Mount volume for database persistence
     volumes:
