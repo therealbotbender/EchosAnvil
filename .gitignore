@@ -17,6 +17,7 @@ npm-debug.log*
 # YouTube cookies (contains authentication)
 youtube-cookies.txt
 cookies.txt
+.temp-cookies*.txt
 
 # Claude AI
 .claude/

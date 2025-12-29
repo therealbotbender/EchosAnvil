@@ -11,10 +11,12 @@ services:
       - CLIENT_ID=${CLIENT_ID}
       - GUILD_ID=${GUILD_ID:-}
       - NODE_ENV=production
+      # REQUIRED for age-restricted videos: Paste your cookies.txt content here
+      # - YOUTUBE_COOKIES=${YOUTUBE_COOKIES}
 
     volumes:
       - echosanvil-data:/app/data
-      # REQUIRED for age-restricted videos: Uncomment and set path to your cookies.txt
+      # Alternative: Mount cookies file instead of using env variable
       # - /path/to/cookies.txt:/app/cookies.txt:ro
 
     networks:

@@ -4,7 +4,30 @@
 
 ## Quick Setup (Recommended)
 
-### Method 1: Export cookies from browser
+### Method 1: Environment Variable (EASIEST - especially for Docker!)
+
+Perfect for Portainer/Docker deployments - no file uploads needed!
+
+1. **Install browser extension:**
+   - Chrome/Edge: [Get cookies.txt LOCALLY](https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
+   - Firefox: [cookies.txt](https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/)
+
+2. **Export cookies:**
+   - Go to https://www.youtube.com while logged in
+   - Click extension icon → Export
+   - Save as `cookies.txt`
+
+3. **Add to environment:**
+   - Open `cookies.txt` in a text editor
+   - Copy ALL contents
+   - Add to your `.env` file or Portainer environment variables:
+     ```bash
+     YOUTUBE_COOKIES=# Paste entire cookies.txt content here
+     ```
+
+4. **Restart the bot** - No file uploads needed!
+
+### Method 2: Export cookies from browser (File-based)
 
 1. **Install browser extension:**
    - Chrome/Edge: [Get cookies.txt LOCALLY](https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
@@ -18,7 +41,7 @@
 
 3. **Restart the bot** - cookies will be automatically detected
 
-### Method 2: Use cookies from browser automatically
+### Method 3: Use cookies from browser automatically
 
 Set environment variable to extract cookies from your browser:
 
@@ -31,7 +54,7 @@ Supported browsers: `chrome`, `firefox`, `edge`, `safari`, `opera`, `brave`
 
 **Note:** This requires the browser to be installed on the same machine as the bot.
 
-### Method 3: Custom cookies path
+### Method 4: Custom cookies path
 
 If you want to store cookies in a different location:
 

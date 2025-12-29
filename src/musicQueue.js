@@ -233,15 +233,33 @@ export class MusicQueue {
       '--age-limit', '0'
     ];
 
-    // Check for cookies file (supports both .txt and Netscape format)
-    const cookiesPath = process.env.YOUTUBE_COOKIES_FILE || join(__dirname, '..', 'cookies.txt');
-    if (existsSync(cookiesPath)) {
-      console.log(`Using YouTube cookies from: ${cookiesPath}`);
-      args.push('--cookies', cookiesPath);
-    } else if (process.env.YOUTUBE_COOKIES_BROWSER) {
-      // Try to use cookies from browser if specified
-      console.log(`Attempting to use cookies from browser: ${process.env.YOUTUBE_COOKIES_BROWSER}`);
-      args.push('--cookies-from-browser', process.env.YOUTUBE_COOKIES_BROWSER);
+    // Cookie support (priority order: env string > file > browser)
+    if (process.env.YOUTUBE_COOKIES) {
+      // Option 1: Cookie string from environment variable (best for Docker/Portainer)
+      console.log('Using YouTube cookies from environment variable');
+      const { writeFileSync, unlinkSync } = await import('fs');
+      const tempCookiePath = join(__dirname, '..', '.temp-cookies.txt');
+      try {
+        writeFileSync(tempCookiePath, process.env.YOUTUBE_COOKIES);
+        args.push('--cookies', tempCookiePath);
+        // Clean up temp file after spawn
+        setTimeout(() => {
+          try { unlinkSync(tempCookiePath); } catch (e) { /* ignore */ }
+        }, 1000);
+      } catch (error) {
+        console.error('Failed to write temp cookies file:', error);
+      }
+    } else {
+      // Option 2: Check for cookies file (supports both .txt and Netscape format)
+      const cookiesPath = process.env.YOUTUBE_COOKIES_FILE || join(__dirname, '..', 'cookies.txt');
+      if (existsSync(cookiesPath)) {
+        console.log(`Using YouTube cookies from: ${cookiesPath}`);
+        args.push('--cookies', cookiesPath);
+      } else if (process.env.YOUTUBE_COOKIES_BROWSER) {
+        // Option 3: Try to use cookies from browser if specified
+        console.log(`Attempting to use cookies from browser: ${process.env.YOUTUBE_COOKIES_BROWSER}`);
+        args.push('--cookies-from-browser', process.env.YOUTUBE_COOKIES_BROWSER);
+      }
     }
 
     return new Promise((resolve, reject) => {
@@ -670,15 +688,33 @@ export class MusicQueue {
       '--age-limit', '0' // Bypass age verification
     ];
 
-    // Check for cookies file (supports both .txt and Netscape format)
-    const cookiesPath = process.env.YOUTUBE_COOKIES_FILE || join(__dirname, '..', 'cookies.txt');
-    if (existsSync(cookiesPath)) {
-      console.log(`Using YouTube cookies from: ${cookiesPath}`);
-      args.push('--cookies', cookiesPath);
-    } else if (process.env.YOUTUBE_COOKIES_BROWSER) {
-      // Try to use cookies from browser if specified
-      console.log(`Attempting to use cookies from browser: ${process.env.YOUTUBE_COOKIES_BROWSER}`);
-      args.push('--cookies-from-browser', process.env.YOUTUBE_COOKIES_BROWSER);
+    // Cookie support (priority order: env string > file > browser)
+    if (process.env.YOUTUBE_COOKIES) {
+      // Option 1: Cookie string from environment variable (best for Docker/Portainer)
+      console.log('Using YouTube cookies from environment variable');
+      const { writeFileSync, unlinkSync } = await import('fs');
+      const tempCookiePath = join(__dirname, '..', '.temp-cookies-stream.txt');
+      try {
+        writeFileSync(tempCookiePath, process.env.YOUTUBE_COOKIES);
+        args.push('--cookies', tempCookiePath);
+        // Clean up temp file after stream starts
+        setTimeout(() => {
+          try { unlinkSync(tempCookiePath); } catch (e) { /* ignore */ }
+        }, 2000);
+      } catch (error) {
+        console.error('Failed to write temp cookies file:', error);
+      }
+    } else {
+      // Option 2: Check for cookies file (supports both .txt and Netscape format)
+      const cookiesPath = process.env.YOUTUBE_COOKIES_FILE || join(__dirname, '..', 'cookies.txt');
+      if (existsSync(cookiesPath)) {
+        console.log(`Using YouTube cookies from: ${cookiesPath}`);
+        args.push('--cookies', cookiesPath);
+      } else if (process.env.YOUTUBE_COOKIES_BROWSER) {
+        // Option 3: Try to use cookies from browser if specified
+        console.log(`Attempting to use cookies from browser: ${process.env.YOUTUBE_COOKIES_BROWSER}`);
+        args.push('--cookies-from-browser', process.env.YOUTUBE_COOKIES_BROWSER);
+      }
     }
 
     return new Promise((resolve, reject) => {

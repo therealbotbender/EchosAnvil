@@ -193,50 +193,74 @@ Then redeploy the stack.
 
 ### Add YouTube Cookies (Required for Age-Restricted Content)
 
-To play age-restricted YouTube videos, you need to provide cookies:
+To play age-restricted YouTube videos, you need to provide cookies.
 
-**Step 1: Export Cookies from Your Browser**
+## Method 1: Environment Variable (EASIEST - Recommended!)
+
+**Step 1: Export Cookies**
 
 1. Install browser extension:
    - Chrome/Edge: [Get cookies.txt LOCALLY](https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
    - Firefox: [cookies.txt](https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/)
 
 2. Go to https://www.youtube.com while logged in
-3. Click the extension icon → Export
+3. Click extension icon → Export
 4. Save the file as `cookies.txt`
 
-**Step 2: Upload to Your Server**
+**Step 2: Add to Portainer**
 
-Upload `cookies.txt` to your server. Choose a location like:
-- `/opt/echosanvil/cookies.txt`
-- `/home/yourusername/cookies.txt`
-- Or anywhere accessible by Docker
+1. Open `cookies.txt` in a text editor and copy ALL the contents
 
-**Step 3: Update Portainer Stack**
+2. Go to **Stacks** → `echosanvil-bot` → **Editor**
+
+3. Find the environment section and add the cookie variable:
+   ```yaml
+   environment:
+     - DISCORD_TOKEN=${DISCORD_TOKEN}
+     - CLIENT_ID=${CLIENT_ID}
+     - GUILD_ID=${GUILD_ID:-}
+     - NODE_ENV=production
+     - YOUTUBE_COOKIES=# Paste your entire cookies.txt content here
+   ```
+
+4. **Paste the cookies** after the `=` sign (all on one line or use quotes for multiline)
+
+5. Click **Update the stack**
+
+**Step 3: Verify**
+
+1. Go to **Containers** → `echosanvil-bot` → **Logs**
+2. Look for: `Using YouTube cookies from environment variable`
+3. If you see this, you're done! ✅
+
+---
+
+## Method 2: File Mount (Alternative)
+
+If you prefer using a file instead of environment variable:
+
+**Step 1: Upload cookies.txt to your server**
+- Use SCP, WinSCP, or paste directly via SSH
+- Save to `/opt/echosanvil/cookies.txt` (or any path)
+
+**Step 2: Update Portainer Stack**
 
 1. Go to **Stacks** → `echosanvil-bot` → **Editor**
-2. Find the volumes section and uncomment the cookies line:
+2. Find the volumes section and uncomment:
    ```yaml
    volumes:
      - echosanvil-data:/app/data
      - /opt/echosanvil/cookies.txt:/app/cookies.txt:ro
    ```
-3. Update `/opt/echosanvil/cookies.txt` to your actual file path
+3. Update path to your file location
 4. Click **Update the stack**
 
-**Step 4: Verify**
+---
 
-1. Go to **Containers** → `echosanvil-bot` → **Logs**
-2. Look for: `Using YouTube cookies from: /app/cookies.txt`
-3. If you see this, cookies are working!
+## Which Method Should You Use?
 
-**Alternative: Use Browser Cookies Directly**
-
-Instead of a file, you can extract cookies from a browser on the server:
-
-1. Add environment variable in Portainer:
-   - `YOUTUBE_COOKIES_BROWSER=chrome` (or firefox, edge, etc.)
-2. This requires the browser to be installed in the Docker container (not recommended)
+- **Environment Variable (Method 1)**: ✅ Easier, no server access needed, all in Portainer UI
+- **File Mount (Method 2)**: Good if you prefer file-based config or have multiple containers sharing cookies
 
 See [docs/youtube-cookies-setup.md](../docs/youtube-cookies-setup.md) for more details.
 
