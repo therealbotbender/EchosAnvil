@@ -19,8 +19,9 @@ services:
     # Mount volume for database persistence
     volumes:
       - ./data:/app/data
-      # Required for age-restricted YouTube videos - create cookies.txt in project directory
-      - ./cookies.txt:/app/cookies.txt:ro
+      # Optional: Mount cookies from host (only if you created cookies.txt on host first!)
+      # If using setup script in container, leave this commented out
+      # - ./cookies.txt:/app/cookies.txt:ro
 
     # Network mode for better Discord voice connectivity
     network_mode: bridge
