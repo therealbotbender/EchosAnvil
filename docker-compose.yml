@@ -13,14 +13,14 @@ services:
       - CLIENT_ID=${CLIENT_ID}
       - GUILD_ID=${GUILD_ID:-}
       - NODE_ENV=production
-      # Required for age-restricted YouTube videos - paste your cookies.txt content
-      - YOUTUBE_COOKIES=${YOUTUBE_COOKIES}
+      # Note: YOUTUBE_COOKIES env var removed - too large for Docker env vars
+      # Use file mount below instead
 
     # Mount volume for database persistence
     volumes:
       - ./data:/app/data
-      # Optional: Mount youtube cookies if you have them
-      # - ./youtube-cookies.txt:/app/youtube-cookies.txt:ro
+      # Required for age-restricted YouTube videos - create cookies.txt in project directory
+      - ./cookies.txt:/app/cookies.txt:ro
 
     # Network mode for better Discord voice connectivity
     network_mode: bridge
