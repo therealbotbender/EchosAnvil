@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ContextMenuCommandBuilder, ApplicationCommandType, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
 import play from 'play-dl';
 import { getUserSongs, getStats } from './database.js';
+import metrics from './metrics.js';
 import {
   createSongAddedEmbed,
   createPlaylistAddedEmbed,
@@ -147,6 +148,9 @@ export const contextMenuCommands = [
 export const allCommands = [...commands, ...contextMenuCommands];
 
 export async function handleCommand(interaction, musicQueue, context) {
+  // Track command execution
+  metrics.incrementCommands();
+
   try {
     switch (interaction.commandName) {
       case 'play':
@@ -711,7 +715,15 @@ async function handleMySongsCommand(interaction) {
 
 async function handleStatsCommand(interaction) {
   const stats = getStats();
-  const embed = createStatsEmbed(stats);
+  const performanceMetrics = metrics.getSnapshot();
+
+  // Combine database stats with performance metrics
+  const combinedStats = {
+    ...stats,
+    performance: performanceMetrics
+  };
+
+  const embed = createStatsEmbed(combinedStats);
   await interaction.reply({ embeds: [embed] });
 }
 

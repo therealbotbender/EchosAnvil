@@ -26,23 +26,23 @@ services:
     # Network mode for better Discord voice connectivity
     network_mode: bridge
 
-    # Resource limits (adjust as needed)
+    # Resource limits (adjusted for better performance)
     deploy:
       resources:
         limits:
-          cpus: '1'
-          memory: 512M
+          cpus: '2'
+          memory: 1G
         reservations:
           cpus: '0.5'
-          memory: 256M
+          memory: 512M
 
-    # Health check
+    # Health check - verifies bot is running and responsive
     healthcheck:
-      test: ["CMD", "node", "-e", "process.exit(0)"]
+      test: ["CMD", "node", "healthcheck.js"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
     # Logging
     logging:

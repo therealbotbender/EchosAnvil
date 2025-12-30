@@ -2,6 +2,7 @@ import initSqlJs from 'sql.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { trackCacheHit, trackCacheMiss, trackDbWrite } from './metrics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -14,6 +15,17 @@ const dbPath = isDocker
 
 let SQL;
 let db;
+
+// Database batching configuration
+let isDirty = false;
+let saveTimeout = null;
+let periodicSaveInterval = null;
+const SAVE_DEBOUNCE_MS = 5000; // 5 seconds debounce
+const PERIODIC_SAVE_MS = 60000; // 60 seconds periodic save
+
+// Query cache configuration
+const queryCache = new Map();
+const CACHE_TTL_MS = 300000; // 5 minutes cache TTL
 
 // Initialize database
 async function initDatabase() {
@@ -84,13 +96,67 @@ async function initDatabase() {
   db.run(`CREATE INDEX IF NOT EXISTS idx_listening_history ON listening_history(user_id, played_at)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_song_ratings ON song_ratings(user_id, song_url)`);
 
-  saveDatabase();
+  // Initial save
+  saveDatabaseImmediate();
+
+  // Start periodic save interval
+  periodicSaveInterval = setInterval(() => {
+    if (isDirty) {
+      console.log('⏰ Periodic database save triggered');
+      saveDatabaseImmediate();
+    }
+  }, PERIODIC_SAVE_MS);
+
+  console.log(`✓ Database auto-save: ${SAVE_DEBOUNCE_MS}ms debounce, ${PERIODIC_SAVE_MS}ms periodic`);
 }
 
+// Immediate save (synchronous)
+function saveDatabaseImmediate() {
+  try {
+    const data = db.export();
+    writeFileSync(dbPath, data);
+    isDirty = false;
+    trackDbWrite();
+    console.log('💾 Database saved to disk');
+  } catch (error) {
+    console.error('Error saving database:', error);
+  }
+}
+
+// Debounced save (batches multiple writes)
 function saveDatabase() {
-  const data = db.export();
-  // data is a Uint8Array; Node can write it directly
-  writeFileSync(dbPath, data);
+  isDirty = true;
+
+  // Clear existing timeout
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+  }
+
+  // Schedule save after debounce period
+  saveTimeout = setTimeout(() => {
+    saveDatabaseImmediate();
+  }, SAVE_DEBOUNCE_MS);
+}
+
+// Graceful shutdown handler
+export function shutdownDatabase() {
+  console.log('🛑 Shutting down database...');
+
+  // Clear intervals and timeouts
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+  }
+  if (periodicSaveInterval) {
+    clearInterval(periodicSaveInterval);
+  }
+
+  // Final save if dirty
+  if (isDirty) {
+    console.log('💾 Final database save before shutdown');
+    saveDatabaseImmediate();
+  }
+
+  console.log('✓ Database shutdown complete');
 }
 
 await initDatabase();
@@ -143,6 +209,9 @@ export function trackUserSong(userId, userName, songUrl, songTitle, songArtist =
       );
     }
 
+    // Invalidate cache since song library changed
+    queryCache.clear();
+
     saveDatabase();
   } catch (error) {
     console.error('Error tracking user song:', error);
@@ -167,6 +236,20 @@ export function getMultipleUsersSongs(userIds, limit = 100) {
   if (userIds.length === 0) return [];
 
   try {
+    // Create cache key from sorted user IDs and limit
+    const cacheKey = `multi_users:${[...userIds].sort().join(',')}:${limit}`;
+
+    // Check cache
+    const cached = queryCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      console.log('📦 Using cached radio song list');
+      trackCacheHit();
+      return cached.data;
+    }
+
+    trackCacheMiss();
+
+    // Query database
     const placeholders = userIds.map(() => '?').join(',');
     const rows = allRows(
       `SELECT
@@ -183,6 +266,12 @@ export function getMultipleUsersSongs(userIds, limit = 100) {
       LIMIT ?`,
       [...userIds, limit]
     );
+
+    // Cache the results
+    queryCache.set(cacheKey, {
+      data: rows,
+      timestamp: Date.now()
+    });
 
     return rows;
   } catch (error) {

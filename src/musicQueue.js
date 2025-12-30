@@ -2,11 +2,59 @@ import { createAudioPlayer, createAudioResource, joinVoiceChannel, AudioPlayerSt
 import play from 'play-dl';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { writeFileSync, existsSync, unlinkSync } from 'fs';
 import { trackUserSong, recordListeningHistory, getMultipleUsersSongs, rateSong } from './database.js';
 import { createNowPlayingEmbed, createPlaybackButtons, createInfoEmbed } from './radioEmbeds.js';
+import metrics from './metrics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Cookie file initialization - write once at module load
+let cookiePath = null;
+let cookiesFromBrowser = null;
+
+// Initialize cookies once at startup
+function initializeCookies() {
+  if (process.env.YOUTUBE_COOKIES) {
+    // Option 1: Cookie string from environment variable (best for Docker/Portainer)
+    cookiePath = join(__dirname, '..', '.persistent-cookies.txt');
+    try {
+      writeFileSync(cookiePath, process.env.YOUTUBE_COOKIES);
+      console.log('✓ YouTube cookies initialized from environment variable');
+    } catch (error) {
+      console.error('Failed to write persistent cookies file:', error);
+      cookiePath = null;
+    }
+  } else {
+    // Option 2: Check for cookies file (supports both .txt and Netscape format)
+    const potentialPath = process.env.YOUTUBE_COOKIES_FILE || join(__dirname, '..', 'cookies.txt');
+    if (existsSync(potentialPath)) {
+      cookiePath = potentialPath;
+      console.log(`✓ YouTube cookies found at: ${cookiePath}`);
+    } else if (process.env.YOUTUBE_COOKIES_BROWSER) {
+      // Option 3: Use cookies from browser if specified
+      cookiesFromBrowser = process.env.YOUTUBE_COOKIES_BROWSER;
+      console.log(`✓ YouTube cookies will be extracted from browser: ${cookiesFromBrowser}`);
+    } else {
+      console.log('ℹ No YouTube cookies configured (age-restricted videos may fail)');
+    }
+  }
+}
+
+// Initialize cookies on module load
+initializeCookies();
+
+// Cleanup handler for persistent cookie file
+process.on('exit', () => {
+  if (cookiePath && cookiePath.includes('.persistent-cookies.txt')) {
+    try {
+      unlinkSync(cookiePath);
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+  }
+});
 
 export class MusicQueue {
   constructor() {
@@ -26,7 +74,11 @@ export class MusicQueue {
     this.crossfadeDuration = 3000; // 3 seconds crossfade
     this.currentVolume = 1.0; // Track current volume level
     this.fadeInterval = null; // Track active fade interval
-    this.botMessages = []; // Track bot messages for cleanup
+    this.botMessages = []; // Track bot messages for cleanup (circular buffer, max 10)
+    this.maxBotMessages = 10; // Maximum messages to track
+    this.retryCount = 0; // Track retry attempts for current song
+    this.maxRetries = 3; // Maximum retry attempts
+    this.failedUrls = new Set(); // Track URLs that consistently fail
 
     this.setupPlayerEvents();
   }
@@ -36,6 +88,7 @@ export class MusicQueue {
       this.isPlaying = false;
       this.clearFadeInterval();
       this.currentVolume = 1.0;
+      this.retryCount = 0; // Reset retry count on successful completion
       this.playNext();
     });
 
@@ -44,10 +97,43 @@ export class MusicQueue {
       this.isPlaying = false;
       this.clearFadeInterval();
       this.currentVolume = 1.0;
-      if (this.textChannel) {
-        this.textChannel.send(`Error playing song: ${error.message}`).catch(console.error);
+
+      // Track error
+      metrics.incrementErrors();
+
+      // Retry logic with exponential backoff
+      if (this.currentSong && this.retryCount < this.maxRetries && !this.failedUrls.has(this.currentSong.url)) {
+        this.retryCount++;
+        metrics.incrementRetries();
+        const backoffMs = Math.min(1000 * Math.pow(2, this.retryCount - 1), 5000); // Max 5 seconds
+        console.log(`Retrying song (attempt ${this.retryCount}/${this.maxRetries}) in ${backoffMs}ms...`);
+
+        if (this.textChannel) {
+          this.textChannel.send(`⚠️ Playback error, retrying... (${this.retryCount}/${this.maxRetries})`).catch(console.error);
+        }
+
+        setTimeout(() => {
+          this.playSong(this.currentSong).catch(err => {
+            console.error('Retry failed:', err);
+          });
+        }, backoffMs);
+      } else {
+        // Max retries exceeded or URL is blacklisted
+        if (this.currentSong) {
+          if (this.retryCount >= this.maxRetries) {
+            console.log(`❌ Max retries exceeded for: ${this.currentSong.title}`);
+            this.failedUrls.add(this.currentSong.url);
+          }
+        }
+
+        this.retryCount = 0;
+
+        if (this.textChannel) {
+          this.textChannel.send(`❌ Error playing song: ${error.message}. Skipping...`).catch(console.error);
+        }
+
+        this.playNext();
       }
-      this.playNext();
     });
   }
 
@@ -56,6 +142,33 @@ export class MusicQueue {
       clearInterval(this.fadeInterval);
       this.fadeInterval = null;
     }
+  }
+
+  // Track bot messages with circular buffer to prevent memory leaks
+  trackBotMessage(message) {
+    this.botMessages.push(message);
+
+    // If we exceed max, delete and remove the oldest message
+    if (this.botMessages.length > this.maxBotMessages) {
+      const oldMessage = this.botMessages.shift();
+      if (oldMessage) {
+        oldMessage.delete().catch(() => {
+          // Ignore deletion errors (message may already be deleted)
+        });
+      }
+    }
+  }
+
+  // Clean up all tracked messages
+  async cleanupMessages() {
+    for (const message of this.botMessages) {
+      try {
+        await message.delete();
+      } catch (error) {
+        // Ignore deletion errors
+      }
+    }
+    this.botMessages = [];
   }
 
   async fadeOutAndSkip() {
@@ -235,33 +348,11 @@ export class MusicQueue {
       '--no-check-certificate'
     ];
 
-    // Cookie support (priority order: env string > file > browser)
-    if (process.env.YOUTUBE_COOKIES) {
-      // Option 1: Cookie string from environment variable (best for Docker/Portainer)
-      console.log('Using YouTube cookies from environment variable');
-      const { writeFileSync, unlinkSync } = await import('fs');
-      const tempCookiePath = join(__dirname, '..', '.temp-cookies.txt');
-      try {
-        writeFileSync(tempCookiePath, process.env.YOUTUBE_COOKIES);
-        args.push('--cookies', tempCookiePath);
-        // Clean up temp file after spawn
-        setTimeout(() => {
-          try { unlinkSync(tempCookiePath); } catch (e) { /* ignore */ }
-        }, 1000);
-      } catch (error) {
-        console.error('Failed to write temp cookies file:', error);
-      }
-    } else {
-      // Option 2: Check for cookies file (supports both .txt and Netscape format)
-      const cookiesPath = process.env.YOUTUBE_COOKIES_FILE || join(__dirname, '..', 'cookies.txt');
-      if (existsSync(cookiesPath)) {
-        console.log(`Using YouTube cookies from: ${cookiesPath}`);
-        args.push('--cookies', cookiesPath);
-      } else if (process.env.YOUTUBE_COOKIES_BROWSER) {
-        // Option 3: Try to use cookies from browser if specified
-        console.log(`Attempting to use cookies from browser: ${process.env.YOUTUBE_COOKIES_BROWSER}`);
-        args.push('--cookies-from-browser', process.env.YOUTUBE_COOKIES_BROWSER);
-      }
+    // Use pre-initialized cookies
+    if (cookiePath) {
+      args.push('--cookies', cookiePath);
+    } else if (cookiesFromBrowser) {
+      args.push('--cookies-from-browser', cookiesFromBrowser);
     }
 
     return new Promise((resolve, reject) => {
@@ -548,6 +639,9 @@ export class MusicQueue {
 
       console.log(`Playing song: ${song.title} - ${song.url}`);
 
+      // Track song play start time for metrics
+      const startTime = Date.now();
+
       this.currentSong = song;
       this.isPlaying = true;
 
@@ -558,6 +652,11 @@ export class MusicQueue {
 
       // Use yt-dlp for streaming
       await this.playWithLocalStream(song);
+
+      // Track successful song load
+      const loadTime = Date.now() - startTime;
+      metrics.recordSongLoadTime(loadTime);
+      metrics.incrementSongsPlayed();
 
       // Fade in the new song
       await this.fadeIn();
@@ -586,8 +685,8 @@ export class MusicQueue {
           embeds: [embed],
           components: [buttons]
         }).then(async (message) => {
-          // Track this message (only keeping the latest one)
-          this.botMessages.push(message);
+          // Track this message with circular buffer
+          this.trackBotMessage(message);
 
           // Add reaction emojis
           try {
@@ -692,33 +791,11 @@ export class MusicQueue {
       '--no-check-certificate'
     ];
 
-    // Cookie support (priority order: env string > file > browser)
-    if (process.env.YOUTUBE_COOKIES) {
-      // Option 1: Cookie string from environment variable (best for Docker/Portainer)
-      console.log('Using YouTube cookies from environment variable');
-      const { writeFileSync, unlinkSync } = await import('fs');
-      const tempCookiePath = join(__dirname, '..', '.temp-cookies-stream.txt');
-      try {
-        writeFileSync(tempCookiePath, process.env.YOUTUBE_COOKIES);
-        args.push('--cookies', tempCookiePath);
-        // Clean up temp file after stream starts
-        setTimeout(() => {
-          try { unlinkSync(tempCookiePath); } catch (e) { /* ignore */ }
-        }, 2000);
-      } catch (error) {
-        console.error('Failed to write temp cookies file:', error);
-      }
-    } else {
-      // Option 2: Check for cookies file (supports both .txt and Netscape format)
-      const cookiesPath = process.env.YOUTUBE_COOKIES_FILE || join(__dirname, '..', 'cookies.txt');
-      if (existsSync(cookiesPath)) {
-        console.log(`Using YouTube cookies from: ${cookiesPath}`);
-        args.push('--cookies', cookiesPath);
-      } else if (process.env.YOUTUBE_COOKIES_BROWSER) {
-        // Option 3: Try to use cookies from browser if specified
-        console.log(`Attempting to use cookies from browser: ${process.env.YOUTUBE_COOKIES_BROWSER}`);
-        args.push('--cookies-from-browser', process.env.YOUTUBE_COOKIES_BROWSER);
-      }
+    // Use pre-initialized cookies
+    if (cookiePath) {
+      args.push('--cookies', cookiePath);
+    } else if (cookiesFromBrowser) {
+      args.push('--cookies-from-browser', cookiesFromBrowser);
     }
 
     return new Promise((resolve, reject) => {
@@ -920,16 +997,38 @@ export class MusicQueue {
         randomSong = diverseSongs[Math.floor(Math.random() * diverseSongs.length)];
         console.log('Selection method: Uniform random (for variety)');
       } else {
-        // Use weighted selection with strongly diminished returns
-        const weightedSongs = diverseSongs.flatMap(song => {
-          // Much more aggressive logarithmic scaling to reduce repeat bias
+        // Optimized weighted selection using cumulative weights
+        const weights = diverseSongs.map(song => {
+          // Logarithmic scaling to reduce repeat bias
           const userWeight = Math.ceil(Math.log2(song.user_count + 1));
           const requestWeight = Math.ceil(Math.log2(song.total_requests + 1));
-          const totalWeight = Math.max(1, Math.min(userWeight + requestWeight, 5)); // Cap at 5
-          return Array(totalWeight).fill(song);
+          return Math.max(1, Math.min(userWeight + requestWeight, 5)); // Cap at 5
         });
-        randomSong = weightedSongs[Math.floor(Math.random() * weightedSongs.length)];
-        console.log('Selection method: Weighted random (capped)');
+
+        // Build cumulative weight array
+        const cumulativeWeights = [];
+        let totalWeight = 0;
+        for (const weight of weights) {
+          totalWeight += weight;
+          cumulativeWeights.push(totalWeight);
+        }
+
+        // Binary search for weighted random selection
+        const random = Math.random() * totalWeight;
+        let left = 0;
+        let right = cumulativeWeights.length - 1;
+
+        while (left < right) {
+          const mid = Math.floor((left + right) / 2);
+          if (cumulativeWeights[mid] < random) {
+            left = mid + 1;
+          } else {
+            right = mid;
+          }
+        }
+
+        randomSong = diverseSongs[left];
+        console.log('Selection method: Weighted random (optimized binary search)');
       }
 
       const radioSong = {
@@ -1153,7 +1252,9 @@ export class MusicQueue {
     this.activeUsers.clear();
     this.recentlyPlayed = [];
     this.recentArtists = [];
-    this.botMessages = [];
+    this.botMessages = []; // Clear message tracking
+    this.retryCount = 0; // Reset retry state
+    this.failedUrls.clear(); // Clear failed URLs
     this.player.stop();
   }
 }

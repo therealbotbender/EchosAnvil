@@ -32,6 +32,7 @@ RUN apk del .build-deps
 # Copy application source
 COPY src/ ./src/
 COPY docs/ ./docs/
+COPY healthcheck.js ./
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/

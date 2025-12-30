@@ -5,6 +5,7 @@ import { MusicQueue } from './musicQueue.js';
 import { commands, allCommands, handleCommand } from './commands.js';
 import { resolveDMContext, updateUserGuildTracking } from './dmContext.js';
 import { handleContextMenuCommand, handleModalSubmit } from './contextMenuHandlers.js';
+import { shutdownDatabase } from './database.js';
 
 config();
 
@@ -247,6 +248,9 @@ process.on('SIGINT', async () => {
     console.log(`Cleaning up guild ${guildId}...`);
     await queue.disconnect();
   }
+
+  // Shutdown database (final save)
+  shutdownDatabase();
 
   client.destroy();
   process.exit(0);

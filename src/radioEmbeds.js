@@ -316,6 +316,61 @@ export function createStatsEmbed(stats) {
     border
   ].join('\n');
 
+  const fields = [
+    {
+      name: '👥 Total Listeners',
+      value: `\`\`\`\n${stats.uniqueUsers}\n\`\`\``,
+      inline: true
+    },
+    {
+      name: '🎵 Music Library',
+      value: `\`\`\`\n${stats.trackedSongs}\n\`\`\``,
+      inline: true
+    },
+    {
+      name: '▶️ Broadcasts',
+      value: `\`\`\`\n${stats.totalPlays}\n\`\`\``,
+      inline: true
+    }
+  ];
+
+  // Add performance metrics if available
+  if (stats.performance) {
+    const perf = stats.performance;
+    fields.push(
+      {
+        name: '⏱️ Uptime',
+        value: `\`\`\`\n${perf.uptime}\n\`\`\``,
+        inline: true
+      },
+      {
+        name: '📋 Commands',
+        value: `\`\`\`\n${perf.commandsExecuted}\n\`\`\``,
+        inline: true
+      },
+      {
+        name: '🎵 Songs Played',
+        value: `\`\`\`\n${perf.songsPlayed}\n\`\`\``,
+        inline: true
+      },
+      {
+        name: '📦 Cache Hit Ratio',
+        value: `\`\`\`\n${perf.cacheHitRatio}\n\`\`\``,
+        inline: true
+      },
+      {
+        name: '⚡ Avg Load Time',
+        value: `\`\`\`\n${perf.avgSongLoadTime}\n\`\`\``,
+        inline: true
+      },
+      {
+        name: '🧠 Memory Usage',
+        value: `\`\`\`\n${perf.memoryUsage.heapUsed}\n\`\`\``,
+        inline: true
+      }
+    );
+  }
+
   const embed = new EmbedBuilder()
     .setColor(RADIO_COLORS.primary)
     .setAuthor({
@@ -323,23 +378,7 @@ export function createStatsEmbed(stats) {
       iconURL: 'https://em-content.zobj.net/thumbs/120/twitter/348/bar-chart_1f4ca.png'
     })
     .setDescription(description)
-    .addFields(
-      {
-        name: '👥 Total Listeners',
-        value: `\`\`\`\n${stats.uniqueUsers}\n\`\`\``,
-        inline: true
-      },
-      {
-        name: '🎵 Music Library',
-        value: `\`\`\`\n${stats.trackedSongs}\n\`\`\``,
-        inline: true
-      },
-      {
-        name: '▶️ Broadcasts',
-        value: `\`\`\`\n${stats.totalPlays}\n\`\`\``,
-        inline: true
-      }
-    )
+    .addFields(fields)
     .setTimestamp()
     .setFooter({
       text: 'ECHO\'S ANVIL RADIO • Broadcasting Your Favorites',
