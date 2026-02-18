@@ -37,8 +37,25 @@ async function initDatabase() {
 
   if (existsSync(dbPath)) {
     const buffer = readFileSync(dbPath);
-    db = new SQL.Database(buffer);
-    console.log('✓ Loaded existing database');
+    try {
+      db = new SQL.Database(buffer);
+      // Quick integrity check
+      db.exec('SELECT count(*) FROM sqlite_master');
+      console.log('✓ Loaded existing database');
+    } catch (err) {
+      console.error('⚠️ Database file is corrupted:', err.message);
+      // Back up the corrupted file
+      const backupPath = dbPath + '.corrupt.' + Date.now();
+      try {
+        writeFileSync(backupPath, buffer);
+        console.log(`💾 Corrupted database backed up to: ${backupPath}`);
+      } catch (backupErr) {
+        console.error('Could not back up corrupted database:', backupErr.message);
+      }
+      // Start fresh
+      db = new SQL.Database();
+      console.log('✓ Created new database (previous was corrupted)');
+    }
   } else {
     db = new SQL.Database();
     console.log('✓ Created new database');
